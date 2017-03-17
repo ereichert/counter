@@ -22,9 +22,9 @@ impl AggregateELBRecord {
     }
 }
 
-pub fn parsing_result_handler(counter_result: ::CounterResult,
-                              aggregation: &mut HashMap<AggregateELBRecord, i64>)
-                              -> () {
+pub fn handle_parsing_result(counter_result: ::CounterResult,
+                             aggregation: &mut HashMap<AggregateELBRecord, i64>)
+                             -> () {
     match counter_result {
         Ok(elb_record) => {
             let aer = AggregateELBRecord::new(

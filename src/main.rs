@@ -151,13 +151,7 @@ fn run_file_processor(id: usize,
         done = match filename_receiver.recv() {
             Ok(ParsingMessages::Filename(filename)) => {
                 debug!("Received filename {}.", filename.path().display());
-                let mut agg: HashMap<record_handling::AggregateELBRecord, i64> = HashMap::new();
-                let num_records = file_handling::process_file(&filename,
-                  &mut |counter_result: counter::CounterResult| {
-                      record_handling::parsing_result_handler(
-                          counter_result, &mut agg
-                      );
-                  });
+                let (num_records, agg) = file_handling::process_file(&filename);
                 debug!("Found {} aggregates in {}.", agg.len(), filename.path().display());
                 let _ = aggregate_sender.send(AggregationMessages::Aggregate(num_records, agg, id));
                 false

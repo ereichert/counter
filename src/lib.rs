@@ -10,6 +10,7 @@ extern crate lazy_static;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::error::Error;
+use std::collections::HashMap;
 
 #[macro_export]
 macro_rules! println_stderr(
@@ -23,6 +24,8 @@ macro_rules! println_stderr(
 
 pub mod file_handling;
 pub mod record_handling;
+
+pub type Aggregation = HashMap<record_handling::AggregateELBRecord, i64>;
 
 pub type CounterResult<'a> = Result<elp::ELBRecord<'a>, CounterError<'a>>;
 

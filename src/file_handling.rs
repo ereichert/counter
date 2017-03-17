@@ -4,7 +4,9 @@ use std::io::{BufRead, BufReader};
 use walkdir;
 use walkdir::{DirEntry, WalkDir};
 use elp;
-use {CounterResult, CounterError};
+use {Aggregation, CounterError};
+use std::collections::HashMap;
+use record_handling;
 
 /// A utility method for retrieving all of the paths to ELB log files in a directory.
 ///
@@ -39,44 +41,46 @@ pub fn file_list(dir: &Path, filenames: &mut Vec<DirEntry>) -> Result<usize, wal
 ///
 /// All failures including file access, file read, and parsing failures are passed to the
 /// `record_handler` as a `ParsingErrors`.
-pub fn process_file<H>(filename: &DirEntry, record_handler: &mut H) -> usize
-    where H: FnMut(CounterResult) -> ()
-{
-    let mut total_record_count = 0;
+pub fn process_file(filename: &DirEntry) -> (usize, Aggregation) {
     debug!("Processing file {}.", filename.path().display());
     match File::open(filename.path()) {
         Ok(file) => {
-            total_record_count = read_records(file, record_handler);
+            let aggregation_result = read_records(file);
             debug!("Found {} records in file {}.",
-            total_record_count,
-            filename.path().display());
+                aggregation_result.0,
+                filename.path().display()
+            );
+            aggregation_result
         }
 
         Err(_) => {
-            record_handler(Err(CounterError::CouldNotOpenFile {
-                path: format!("{}", filename.path().display()),
-            }))
+            unimplemented!()
+//            record_handling::parsing_result_handler(CounterError::CouldNotOpenFile {
+//                path: format!("{}", filename.path().display())},
+//                HashMap::with_capacity(0))
         }
     }
-
-    total_record_count
 }
 
-pub fn read_records<H>(file: File, record_handler: &mut H) -> usize
-    where H: FnMut(CounterResult) -> ()
-{
+pub fn read_records(file: File) -> (usize, Aggregation) {
+    let mut agg: Aggregation = HashMap::new();
+
     let mut file_record_count = 0;
     for possible_record in BufReader::new(&file).lines() {
         file_record_count += 1;
         match possible_record {
             Ok(record) => {
-                record_handler(elp::parse_record(&record)
-                    .map_err(CounterError::RecordParsingErrors))
+                record_handling::handle_parsing_result(
+                    elp::parse_record(&record).map_err(CounterError::RecordParsingErrors),
+                    &mut agg
+                );
             }
 
-            Err(_) => record_handler(Err(CounterError::LineReadError)),
+            Err(_) => {
+//                record_handling::parsing_result_handler(CounterError::LineReadError, &mut agg)
+            },
         }
     }
 
-    file_record_count
+    (file_record_count, agg)
 }
