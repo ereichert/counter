@@ -58,7 +58,7 @@ fn main() {
                 let (filename_sender, filename_receiver) = mpsc::channel::<_>();
                 filename_senders.push(filename_sender);
                 let cloned_agg_sender = agg_sender.clone();
-                pool.spawn(move ||  run_file_processor(sender_id, filename_receiver, cloned_agg_sender) );
+                pool.spawn(move ||  run_file_processor(sender_id, &filename_receiver, &cloned_agg_sender) );
             }
 
             let mut number_of_records = 0;
@@ -140,8 +140,8 @@ enum ParsingMessages {
 // TODO: Test this.
 // TODO: Use a real file.
 fn run_file_processor(id: usize,
-                      filename_receiver: mpsc::Receiver<ParsingMessages>,
-                      aggregate_sender: mpsc::Sender<AggregationMessages>) -> () {
+                      filename_receiver: &mpsc::Receiver<ParsingMessages>,
+                      aggregate_sender: &mpsc::Sender<AggregationMessages>) -> () {
     let mut done = false;
     // TODO: There needs to be a timeout here to ensure the program doesn't run forever.
     // TODO: Make use of try_rec.
@@ -156,8 +156,7 @@ fn run_file_processor(id: usize,
                 let _ = aggregate_sender.send(AggregationMessages::Aggregate(num_records, agg, id));
                 false
             },
-            Ok(ParsingMessages::Done) => true,
-            Err(_) => true,
+            Ok(ParsingMessages::Done) | Err(_) => true,
         }
     }
     let _ = aggregate_sender.send(AggregationMessages::Done);

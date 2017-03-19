@@ -30,7 +30,7 @@ pub fn handle_parsing_result(counter_result: ::CounterResult,
             let aer = AggregateELBRecord::new(
                 elb_record.timestamp,
                 *elb_record.client_address.ip(),
-                parse_system_name_regex(&elb_record.request_url)
+                parse_system_name_regex(elb_record.request_url)
                     .unwrap_or_else(|| "UNDEFINED_SYSTEM".to_owned())
             );
             aggregate_record(aer, aggregation);

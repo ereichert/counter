@@ -45,7 +45,7 @@ pub fn process_file(filename: &DirEntry) -> (usize, Aggregation) {
     debug!("Processing file {}.", filename.path().display());
     match File::open(filename.path()) {
         Ok(file) => {
-            let aggregation_result = read_records(file);
+            let aggregation_result = read_records(&file);
             debug!("Found {} records in file {}.",
                 aggregation_result.0,
                 filename.path().display()
@@ -62,23 +62,19 @@ pub fn process_file(filename: &DirEntry) -> (usize, Aggregation) {
     }
 }
 
-pub fn read_records(file: File) -> (usize, Aggregation) {
+pub fn read_records(file: &File) -> (usize, Aggregation) {
     let mut agg: Aggregation = HashMap::new();
 
     let mut file_record_count = 0;
-    for possible_record in BufReader::new(&file).lines() {
+    for possible_record in BufReader::new(file).lines() {
         file_record_count += 1;
-        match possible_record {
-            Ok(record) => {
-                record_handling::handle_parsing_result(
-                    elp::parse_record(&record).map_err(CounterError::RecordParsingErrors),
-                    &mut agg
-                );
-            }
-
-            Err(_) => {
-//                record_handling::parsing_result_handler(CounterError::LineReadError, &mut agg)
-            },
+        if let Ok(record) = possible_record {
+            record_handling::handle_parsing_result(
+                elp::parse_record(&record).map_err(CounterError::RecordParsingErrors),
+                &mut agg
+            );
+        } else {
+            //                record_handling::parsing_result_handler(CounterError::LineReadError, &mut agg)
         }
     }
 
