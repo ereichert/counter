@@ -70,6 +70,8 @@ mod record_handling_tests {
     use std::collections::HashMap;
     use super::AggregateELBRecord;
     use super::aggregate_record;
+    use chrono::{DateTime, UTC};
+    use std::net::SocketAddrV4;
 
     const TEST_RECORD: &'static str = "2015-08-15T23:43:05.302180Z elb-name 172.16.1.6:54814 \
     172.16.1.5:9000 0.000039 0.145507 0.00003 200 200 0 7582 \
@@ -81,14 +83,14 @@ mod record_handling_tests {
         let mut agg: HashMap<AggregateELBRecord, i64> = HashMap::new();
 
         let ar0 = AggregateELBRecord {
-            day: "2015-08-15".to_owned(),
-            client_address: "172.16.1.6:54814".to_owned(),
+            day: "2015-08-15T23:43:05.302180Z".parse::<DateTime<UTC>>().unwrap().date(),
+            client_address: *"172.16.1.6:54814".parse::<SocketAddrV4>().unwrap().ip(),
             system_name: "sys1".to_owned(),
         };
 
         let ar1 = AggregateELBRecord {
-            day: "2015-08-15".to_owned(),
-            client_address: "172.16.1.6:54814".to_owned(),
+            day: "2015-08-15T23:43:05.302180Z".parse::<DateTime<UTC>>().unwrap().date(),
+            client_address: *"172.16.1.6:54814".parse::<SocketAddrV4>().unwrap().ip(),
             system_name: "sys2".to_owned(),
         };
 
@@ -106,8 +108,8 @@ mod record_handling_tests {
         let mut agg: HashMap<AggregateELBRecord, i64> = HashMap::new();
 
         let ar0 = AggregateELBRecord {
-            day: "2015-08-15".to_owned(),
-            client_address: "172.16.1.6:54814".to_owned(),
+            day: "2015-08-15T23:43:05.302180Z".parse::<DateTime<UTC>>().unwrap().date(),
+            client_address: *"172.16.1.6:54814".parse::<SocketAddrV4>().unwrap().ip(),
             system_name: "sys1".to_owned(),
         };
 
