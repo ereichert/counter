@@ -27,12 +27,11 @@ pub fn handle_parsing_result(counter_result: ::CounterResult,
                              -> () {
     match counter_result {
         Ok(elb_record) => {
-            let aer = AggregateELBRecord::new(
-                elb_record.timestamp,
-                *elb_record.client_address.ip(),
-                parse_system_name_regex(elb_record.request_url)
-                    .unwrap_or_else(|| "UNDEFINED_SYSTEM".to_owned())
-            );
+            let aer =
+                AggregateELBRecord::new(elb_record.timestamp,
+                                        *elb_record.client_address.ip(),
+                                        parse_system_name_regex(elb_record.request_url)
+                                            .unwrap_or_else(|| "UNDEFINED_SYSTEM".to_owned()));
             aggregate_record(aer, aggregation);
         }
         Err(::CounterError::RecordParsingErrors(ref errs)) => println_stderr!("{:?}", errs.record),
@@ -45,17 +44,17 @@ lazy_static! {
 }
 
 fn parse_system_name_regex(q: &str) -> Option<String> {
-    SYSTEM_REGEX.captures(q).and_then( |cap| cap.get(1).map(|sys| sys.as_str().to_string() ))
+    SYSTEM_REGEX.captures(q).and_then(|cap| cap.get(1).map(|sys| sys.as_str().to_string()))
 }
 
 pub fn aggregate_records(new_aggs: &HashMap<AggregateELBRecord, i64>,
-                     aggregation: &mut HashMap<AggregateELBRecord, i64>)
-                     -> () {
+                         aggregation: &mut HashMap<AggregateELBRecord, i64>)
+                         -> () {
     for (agg_key, agg_val) in new_aggs {
         let total = aggregation.entry(agg_key.clone()).or_insert(0);
         *total += *agg_val;
     }
- }
+}
 
 fn aggregate_record(aggregate_record: AggregateELBRecord,
                     aggregation: &mut HashMap<AggregateELBRecord, i64>)
