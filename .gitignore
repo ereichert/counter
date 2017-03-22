@@ -5,3 +5,4 @@ target
 out.folded
 out.stacks
 out.svg
+int_tests/
