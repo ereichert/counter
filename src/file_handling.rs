@@ -19,7 +19,8 @@ use record_handling;
 /// dir: The directory from which the paths of the ELB log files will be procured.
 ///
 /// filenames: A Vec<`DirEntry`> to which the paths of the ELB log files will be written.
-pub fn file_list(dir: &Path, filenames: &mut Vec<DirEntry>) -> Result<usize, walkdir::Error> {
+pub fn file_list(dir: &Path) -> Result<Vec<DirEntry>, walkdir::Error> {
+    let mut filenames = Vec::new();
     let dir_entries = WalkDir::new(dir);
     for entry in dir_entries {
         if let Ok(dir_entry) = entry {
@@ -28,7 +29,7 @@ pub fn file_list(dir: &Path, filenames: &mut Vec<DirEntry>) -> Result<usize, wal
             }
         }
     }
-    Ok(filenames.len())
+    Ok(filenames)
 }
 
 /// Attempt to parse every ELB record in every file in `filenames` and pass the results to the

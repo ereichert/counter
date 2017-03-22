@@ -36,15 +36,14 @@ fn main() {
         None
     };
 
-    let pool = sp::Pool::new(num_cpus::get());
-
-    let mut filenames = Vec::new();
-    let exit_code = match file_handling::file_list(log_location, &mut filenames) {
-        Ok(num_files) => {
+    let exit_code = match file_handling::file_list(log_location) {
+        Ok(ref mut filenames) => {
+            let num_files = filenames.len();
             let mut agg: HashMap<record_handling::AggregateELBRecord, i64> = HashMap::new();
             debug!("Found {} files.", num_files);
             let mut filename_senders = Vec::new();
             let (agg_sender, agg_receiver) = mpsc::channel::<_>();
+            let pool = sp::Pool::new(num_cpus::get());
             for sender_id in 0..pool.workers() {
                 let (filename_sender, filename_receiver) = mpsc::channel::<_>();
                 filename_senders.push(filename_sender);
@@ -104,6 +103,7 @@ fn main() {
                          time.num_milliseconds(),
                          agg.len());
             }
+            pool.shutdown();
             EXIT_SUCCESS
         }
 
@@ -115,7 +115,6 @@ fn main() {
         }
     };
 
-    pool.shutdown();
     std::process::exit(exit_code);
 }
 
