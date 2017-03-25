@@ -1,10 +1,11 @@
 use std::path::Path;
 use std::fs::File;
+use std::io;
 use std::io::{BufRead, BufReader};
 use walkdir;
 use walkdir::{DirEntry, WalkDir};
 use elp;
-use {Aggregation, CounterError};
+use {Aggregation, FileAggregationResult, CounterError};
 use std::collections::HashMap;
 use record_handling;
 
@@ -24,33 +25,23 @@ pub fn file_list(dir: &Path) -> Result<Vec<DirEntry>, walkdir::Error> {
     Ok(filenames)
 }
 
-/// Attempt to parse every ELB record in every file in `filenames` and pass the results to the
-/// `record_handler`.
+/// Attempt to parse every ELB record in the file found at `path` and return the `FileAggregation`.
 ///
 /// Each file will be opened and each line, which should represent a ELB record, will be passed
 /// through the parser.
-///
-/// # Failures
-///
-/// All failures including file access, file read, and parsing failures are passed to the
-/// `record_handler` as a `ParsingErrors`.
-pub fn process_file(filename: &DirEntry) -> (usize, Aggregation) {
-    debug!("Processing file {}.", filename.path().display());
-    match File::open(filename.path()) {
+pub fn process_file(path: &Path) -> Result<FileAggregationResult, io::Error> {
+    debug!("Processing file {}.", path.display());
+    match File::open(path) {
         Ok(file) => {
             let aggregation_result = read_records(&file);
-            debug!("Found {} records in file {}.",
-                   aggregation_result.0,
-                   filename.path().display());
-            aggregation_result
+            debug!("Found {} records in file {}.", aggregation_result.0, path.display());
+            Ok(FileAggregationResult{
+                num_raw_records: aggregation_result.0,
+                aggregation: aggregation_result.1,
+            })
         }
 
-        Err(_) => {
-            unimplemented!()
-            //            record_handling::parsing_result_handler(CounterError::CouldNotOpenFile {
-            //                path: format!("{}", filename.path().display())},
-            //                HashMap::with_capacity(0))
-        }
+        Err(err) => Err(err)
     }
 }
 
@@ -72,7 +63,34 @@ pub fn read_records(file: &File) -> (usize, Aggregation) {
     (file_record_count, agg)
 }
 
+#[cfg(test)]
+mod process_file_tests {
+    use std::path::Path;
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
 
+    // DO NOT MODIFY THESE PATHS. USE SYMLINKS TO REDIRECT TO SOMETHING ELSE.
+    pub const TEST_LOG_FILE: &'static str = "./test_artifacts/test_elb_log_file.log";
+
+    #[test]
+    fn process_file_should_return_a_result_with_the_correct_number_of_processed_records() {
+        let num_lines = BufReader::new(File::open(TEST_LOG_FILE).unwrap()).lines().collect::<Vec<_>>().len();
+        let log_path = Path::new(TEST_LOG_FILE);
+
+        let file_agg_result = super::process_file(&log_path).unwrap();
+
+        assert_eq!(file_agg_result.num_raw_records, num_lines)
+    }
+
+    #[test]
+    fn process_file_should_return_an_error_when_the_file_cannot_be_opened() {
+        let log_path = Path::new("bad_filename");
+
+        let result = super::process_file(&log_path);
+
+        assert!(result.is_err())
+    }
+}
 
 #[cfg(test)]
 mod file_list_tests {

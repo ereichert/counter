@@ -26,7 +26,10 @@ pub mod file_handling;
 pub mod record_handling;
 
 pub type Aggregation = HashMap<record_handling::AggregateELBRecord, i64>;
-
+pub struct FileAggregationResult {
+    pub num_raw_records: usize,
+    pub aggregation: Aggregation,
+}
 pub type CounterResult<'a> = Result<elp::ELBRecord<'a>, CounterError<'a>>;
 
 /// Specific parsing errors that are returned as part of the [`ParsingErrors::errors`]
