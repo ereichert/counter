@@ -8,6 +8,7 @@ use elp;
 use {Aggregation, FileAggregationResult, CounterError};
 use std::collections::HashMap;
 use record_handling;
+use std::io::Write;
 
 /// A utility method for retrieving all of the paths to ELB log files in a directory.
 ///
@@ -34,33 +35,59 @@ pub fn process_file(path: &Path) -> Result<FileAggregationResult, io::Error> {
     match File::open(path) {
         Ok(file) => {
             let aggregation_result = read_records(&file);
-            debug!("Found {} records in file {}.", aggregation_result.0, path.display());
-            Ok(FileAggregationResult{
-                num_raw_records: aggregation_result.0,
-                aggregation: aggregation_result.1,
-            })
+            debug!("Found {} records in file {}.",
+                   aggregation_result.num_raw_records,
+                   path.display());
+            Ok(aggregation_result)
         }
 
-        Err(err) => Err(err)
+        Err(err) => Err(err),
     }
 }
 
-pub fn read_records(file: &File) -> (usize, Aggregation) {
+fn read_records(file: &File) -> FileAggregationResult {
     let mut agg: Aggregation = HashMap::new();
-
     let mut file_record_count = 0;
     for possible_record in BufReader::new(file).lines() {
         file_record_count += 1;
         if let Ok(record) = possible_record {
-            record_handling::handle_parsing_result(elp::parse_record(&record)
-                                                       .map_err(CounterError::RecordParsingErrors),
-                                                   &mut agg);
+            let parsing_result = elp::parse_record(&record)
+                .map_err(CounterError::RecordParsingErrors);
+            record_handling::handle_parsing_result(parsing_result, &mut agg);
         } else {
-            // record_handling::parsing_result_handler(CounterError::LineReadError, &mut agg)
+            // TODO: This needs to include the file from which the line read error originated.
+            println_stderr!("{:?}", CounterError::LineReadError);
         }
     }
 
-    (file_record_count, agg)
+    FileAggregationResult {
+        num_raw_records: file_record_count,
+        aggregation: agg,
+    }
+}
+
+#[cfg(test)]
+mod test_common {
+
+    // DO NOT MODIFY THESE PATHS. USE SYMLINKS TO REDIRECT TO SOMETHING ELSE.
+    pub const TEST_LOG_FILE: &'static str = "./test_artifacts/test_elb_log_file.log";
+    pub const TEST_LOG_FILE_AGGS: usize = 88;
+}
+
+#[cfg(test)]
+mod read_records {
+
+    use std::fs::File;
+    use super::test_common;
+
+    #[test]
+    fn read_records() {
+        let file = File::open(test_common::TEST_LOG_FILE).unwrap();
+
+        let returned_agg = super::read_records(&file);
+
+        assert_eq!(returned_agg.aggregation.len(), test_common::TEST_LOG_FILE_AGGS)
+    }
 }
 
 #[cfg(test)]
@@ -68,14 +95,13 @@ mod process_file_tests {
     use std::path::Path;
     use std::fs::File;
     use std::io::{BufRead, BufReader};
-
-    // DO NOT MODIFY THESE PATHS. USE SYMLINKS TO REDIRECT TO SOMETHING ELSE.
-    pub const TEST_LOG_FILE: &'static str = "./test_artifacts/test_elb_log_file.log";
+    use super::test_common;
 
     #[test]
     fn process_file_should_return_a_result_with_the_correct_number_of_processed_records() {
-        let num_lines = BufReader::new(File::open(TEST_LOG_FILE).unwrap()).lines().collect::<Vec<_>>().len();
-        let log_path = Path::new(TEST_LOG_FILE);
+        let num_lines = BufReader::new(File::open(test_common::TEST_LOG_FILE).unwrap())
+            .lines().collect::<Vec<_>>().len();
+        let log_path = Path::new(test_common::TEST_LOG_FILE);
 
         let file_agg_result = super::process_file(&log_path).unwrap();
 
@@ -104,7 +130,7 @@ mod file_list_tests {
 
     #[test]
     fn file_list_should_return_the_correct_number_of_files() {
-        run_int_test_in_test_dir(|test_dir|{
+        run_int_test_in_test_dir(|test_dir| {
             let mut thread_range = rand::thread_rng();
             let num_files_range = Range::new(5, 20);
             let num_files = num_files_range.ind_sample(&mut thread_range);
@@ -137,7 +163,7 @@ mod file_list_tests {
 
     #[test]
     fn file_list_should_return_0_when_there_are_no_files_in_the_directory() {
-        run_int_test_in_test_dir(|test_dir|{
+        run_int_test_in_test_dir(|test_dir| {
             let files = super::file_list(Path::new(test_dir)).unwrap();
 
             assert_eq!(files.len(), 0)
@@ -150,9 +176,7 @@ mod file_list_tests {
         creat_test_dir();
         let test_dir_path = create_empty_dir();
 
-        let result = panic::catch_unwind(|| {
-            test(&test_dir_path)
-        });
+        let result = panic::catch_unwind(|| test(&test_dir_path));
 
         let _ = fs::remove_dir_all(&test_dir_path);
 
@@ -164,9 +188,7 @@ mod file_list_tests {
     pub const TEST_DIR: &'static str = "./int_tests";
     static TEST_DIR_SYNC: sync::Once = sync::ONCE_INIT;
     fn creat_test_dir() {
-        TEST_DIR_SYNC.call_once(|| {
-            let _ = fs::create_dir(TEST_DIR);
-        });
+        TEST_DIR_SYNC.call_once(|| { let _ = fs::create_dir(TEST_DIR); });
     }
 
     fn create_empty_dir() -> String {
@@ -180,7 +202,6 @@ mod file_list_tests {
     }
 
     impl NameGenerator {
-
         fn next(&mut self) -> String {
             if self.generator.is_none() {
                 self.generator = Some(names::Generator::default());
@@ -190,7 +211,5 @@ mod file_list_tests {
         }
     }
 
-    const NAME_GENERATOR: NameGenerator = NameGenerator {
-        generator: None,
-    };
+    const NAME_GENERATOR: NameGenerator = NameGenerator { generator: None };
 }

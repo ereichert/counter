@@ -190,8 +190,8 @@ fn run_file_processor(id: usize,
                 debug!("Received filename {}.", filename.path().display());
                 if let Ok(file_aggregation_result) = file_handling::process_file(filename.path()) {
                     debug!("Found {} aggregates in {}.",
-                    file_aggregation_result.aggregation.len(),
-                    filename.path().display());
+                           file_aggregation_result.aggregation.len(),
+                           filename.path().display());
                     let _ = aggregate_sender.send(AggregationMessages::Aggregate(file_aggregation_result.num_raw_records, file_aggregation_result.aggregation, id));
                 } else {
                     // TODO: This needs to be handled. Probably should write out the error to stderr.
