@@ -34,7 +34,7 @@ pub fn process_file(path: &Path) -> Result<FileAggregationResult, io::Error> {
     debug!("Processing file {}.", path.display());
     match File::open(path) {
         Ok(file) => {
-            let aggregation_result = read_records(&file);
+            let aggregation_result = read_records(path, &file);
             debug!("Found {} records in file {}.",
                    aggregation_result.num_raw_records,
                    path.display());
@@ -45,7 +45,7 @@ pub fn process_file(path: &Path) -> Result<FileAggregationResult, io::Error> {
     }
 }
 
-fn read_records(file: &File) -> FileAggregationResult {
+fn read_records(path: &Path, file: &File) -> FileAggregationResult {
     let mut agg: Aggregation = HashMap::new();
     let mut file_record_count = 0;
     for possible_record in BufReader::new(file).lines() {
@@ -55,8 +55,9 @@ fn read_records(file: &File) -> FileAggregationResult {
                 .map_err(CounterError::RecordParsingErrors);
             record_handling::handle_parsing_result(parsing_result, &mut agg);
         } else {
-            // TODO: This needs to include the file from which the line read error originated.
-            println_stderr!("{:?}", CounterError::LineReadError);
+            println_stderr!("Failed to read line {} in file {}.",
+                file_record_count + 1,
+                path.display());
         }
     }
 
@@ -78,13 +79,15 @@ mod test_common {
 mod read_records {
 
     use std::fs::File;
+    use std::path::Path;
     use super::test_common;
 
     #[test]
     fn read_records() {
-        let file = File::open(test_common::TEST_LOG_FILE).unwrap();
+        let path = Path::new(test_common::TEST_LOG_FILE);
+        let file = File::open(&path).unwrap();
 
-        let returned_agg = super::read_records(&file);
+        let returned_agg = super::read_records(&path, &file);
 
         assert_eq!(returned_agg.aggregation.len(), test_common::TEST_LOG_FILE_AGGS)
     }

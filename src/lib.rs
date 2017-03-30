@@ -36,9 +36,6 @@ pub type CounterResult<'a> = Result<elp::ELBRecord<'a>, CounterError<'a>>;
 /// (struct.ParsingErrors.html) collection.
 #[derive(Debug, PartialEq)]
 pub enum CounterError<'a> {
-    /// Returned if a line in an ELB file cannot be read.  Most likely the result of a bad file on
-    /// disk.
-    LineReadError,
     /// Returned if an ELB file cannot be opened.  Most likely the result of a bad file on disk.
     CouldNotOpenFile { path: String },
     RecordParsingErrors(elp::ParsingErrors<'a>),
@@ -47,7 +44,6 @@ pub enum CounterError<'a> {
 impl<'a> Display for CounterError<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
-            CounterError::LineReadError => write!(f, "Unable to read a line."),
             CounterError::CouldNotOpenFile { ref path } => {
                 write!(f, "Unable to open file {}.", path)
             }
@@ -61,7 +57,6 @@ impl<'a> Display for CounterError<'a> {
 impl<'a> Error for CounterError<'a> {
     fn description(&self) -> &str {
         match *self {
-            CounterError::LineReadError => "failed to read line",
             CounterError::CouldNotOpenFile { .. } => "failed to open file",
             CounterError::RecordParsingErrors(_) => "failed to parse record",
         }
