@@ -10,9 +10,6 @@ use std::collections::HashMap;
 use record_handling;
 use std::io::Write;
 
-/// A utility method for retrieving all of the paths to ELB log files in a directory.
-///
-/// dir: The directory from which the paths of the ELB log files will be procured.
 pub fn file_list(dir: &Path) -> Result<Vec<DirEntry>, walkdir::Error> {
     let mut filenames = Vec::new();
     let dir_entries = WalkDir::new(dir);
@@ -26,10 +23,6 @@ pub fn file_list(dir: &Path) -> Result<Vec<DirEntry>, walkdir::Error> {
     Ok(filenames)
 }
 
-/// Attempt to parse every ELB record in the file found at `path` and return the `FileAggregation`.
-///
-/// Each file will be opened and each line, which should represent a ELB record, will be passed
-/// through the parser.
 pub fn process_file(path: &Path) -> Result<FileAggregationResult, io::Error> {
     debug!("Processing file {}.", path.display());
     match File::open(path) {
