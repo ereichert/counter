@@ -49,8 +49,8 @@ fn main() {
                 filename_senders.push(filename_sender);
                 let cloned_agg_sender = agg_sender.clone();
                 pool.spawn(move || {
-                    run_file_processor(sender_id, &filename_receiver, &cloned_agg_sender)
-                });
+                               run_file_processor(sender_id, &filename_receiver, &cloned_agg_sender)
+                           });
             }
 
             let mut number_of_records = 0;
@@ -74,7 +74,7 @@ fn main() {
                             let _ = sender.send(ParsingMessages::Done);
                         }
                         number_of_records += num_parsed_records;
-                        record_handling::aggregate_records(&new_agg, &mut agg);
+                        record_handling::merge_aggregates(&new_agg, &mut agg);
                     }
                     Ok(AggregationMessages::Done) => dones += 1,
                     Err(_) => debug!("Received an error from one of the parsing workers."),
@@ -144,13 +144,13 @@ impl<'a> RuntimeContext<'a> {
     fn new_app<'b>() -> clap::App<'a, 'b> {
         clap::App::new("counter")
             .arg(clap::Arg::with_name(LOG_LOCATION_ARG)
-                .required(true)
-                .help("The root directory when the log files are stored."))
+                     .required(true)
+                     .help("The root directory when the log files are stored."))
             .arg(clap::Arg::with_name(BENCHMARK_ARG)
-                .required(false)
-                .help("Time the run and provide statistics at the end of the run.")
-                .long("benchmark")
-                .short("b"))
+                     .required(false)
+                     .help("Time the run and provide statistics at the end of the run.")
+                     .long("benchmark")
+                     .short("b"))
     }
 
     fn run_benchmark(&self) -> bool {
@@ -192,9 +192,14 @@ fn run_file_processor(id: usize,
                     debug!("Found {} aggregates in {}.",
                            file_aggregation_result.aggregation.len(),
                            filename.path().display());
-                    let _ = aggregate_sender.send(AggregationMessages::Aggregate(file_aggregation_result.num_raw_records, file_aggregation_result.aggregation, id));
+                    let _ = aggregate_sender.send(
+                        AggregationMessages::Aggregate(
+                            file_aggregation_result.num_raw_records,
+                            file_aggregation_result.aggregation, id
+                        )
+                    );
                 } else {
-                    // TODO: This needs to be handled. Probably should write out the error to stderr.
+                    // TODO: Write the error to stderr.
                 }
 
                 false

@@ -25,10 +25,10 @@ macro_rules! println_stderr(
 pub mod file_handling;
 pub mod record_handling;
 
-pub type Aggregation = HashMap<record_handling::AggregateELBRecord, i64>;
+pub type ELBRecordAggregation = HashMap<record_handling::AggregateELBRecord, i64>;
 pub struct FileAggregationResult {
     pub num_raw_records: usize,
-    pub aggregation: Aggregation,
+    pub aggregation: ELBRecordAggregation,
 }
 pub type CounterResult<'a> = Result<elp::ELBRecord<'a>, CounterError<'a>>;
 

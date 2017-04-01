@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use std::io::Write;
 
 use chrono::{Date, DateTime, UTC};
 use std::net::Ipv4Addr;
 use regex::Regex;
+use ELBRecordAggregation;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct AggregateELBRecord {
@@ -23,7 +23,7 @@ impl AggregateELBRecord {
 }
 
 pub fn handle_parsing_result(counter_result: ::CounterResult,
-                             aggregation: &mut HashMap<AggregateELBRecord, i64>)
+                             aggregation: &mut ELBRecordAggregation)
                              -> () {
     match counter_result {
         Ok(elb_record) => {
@@ -44,52 +44,58 @@ lazy_static! {
 }
 
 fn parse_system_name_regex(q: &str) -> Option<String> {
-    SYSTEM_REGEX.captures(q).and_then(|cap| cap.get(1).map(|sys| sys.as_str().to_string()))
+    SYSTEM_REGEX
+        .captures(q)
+        .and_then(|cap| cap.get(1).map(|sys| sys.as_str().to_string()))
 }
 
-pub fn aggregate_records(new_aggs: &HashMap<AggregateELBRecord, i64>,
-                         aggregation: &mut HashMap<AggregateELBRecord, i64>)
-                         -> () {
-    for (agg_key, agg_val) in new_aggs {
-        let total = aggregation.entry(agg_key.clone()).or_insert(0);
+pub fn merge_aggregates(src_aggs: &ELBRecordAggregation,
+                        dst_aggs: &mut ELBRecordAggregation)
+                        -> () {
+    for (agg_key, agg_val) in src_aggs {
+        let total = dst_aggs.entry(agg_key.clone()).or_insert(0);
         *total += *agg_val;
     }
 }
 
 fn aggregate_record(aggregate_record: AggregateELBRecord,
-                    aggregation: &mut HashMap<AggregateELBRecord, i64>)
+                    dst_aggs: &mut ELBRecordAggregation)
                     -> () {
-    let total = aggregation.entry(aggregate_record).or_insert(0);
+    let total = dst_aggs.entry(aggregate_record).or_insert(0);
     *total += 1;
 }
 
 #[cfg(test)]
-mod aggregate_records_tests {
+mod aggregate_record_tests {
 
     use std::collections::HashMap;
-    use super::AggregateELBRecord;
-    use super::aggregate_record;
     use chrono::{DateTime, UTC};
     use std::net::SocketAddrV4;
 
     #[test]
     fn inserting_two_records_with_different_values_creates_two_entries_each_recorded_once() {
-        let mut agg: HashMap<AggregateELBRecord, i64> = HashMap::new();
+        let mut agg: super::ELBRecordAggregation = HashMap::new();
 
-        let ar0 = AggregateELBRecord {
-            day: "2015-08-15T23:43:05.302180Z".parse::<DateTime<UTC>>().unwrap().date(),
+        let ar0 = super::AggregateELBRecord {
+            day: "2015-08-15T23:43:05.302180Z"
+                .parse::<DateTime<UTC>>()
+                .unwrap()
+                .date(),
             client_address: *"172.16.1.6:54814".parse::<SocketAddrV4>().unwrap().ip(),
             system_name: "sys1".to_owned(),
         };
 
-        let ar1 = AggregateELBRecord {
-            day: "2015-08-15T23:43:05.302180Z".parse::<DateTime<UTC>>().unwrap().date(),
+        let ar1 = super::AggregateELBRecord {
+            day: "2015-08-15T23:43:05.302180Z"
+                .parse::<DateTime<UTC>>()
+                .unwrap()
+                .date(),
             client_address: *"172.16.1.6:54814".parse::<SocketAddrV4>().unwrap().ip(),
             system_name: "sys2".to_owned(),
         };
 
-        aggregate_record(ar0, &mut agg);
-        aggregate_record(ar1, &mut agg);
+        super::aggregate_record(ar0, &mut agg);
+        super::aggregate_record(ar1, &mut agg);
 
         assert_eq!(agg.len(), 2);
         for (_, total) in agg {
@@ -99,10 +105,13 @@ mod aggregate_records_tests {
 
     #[test]
     fn inserting_two_records_with_the_same_values_increases_the_total_correctly() {
-        let mut agg: HashMap<AggregateELBRecord, i64> = HashMap::new();
+        let mut agg: super::ELBRecordAggregation = HashMap::new();
 
-        let ar0 = AggregateELBRecord {
-            day: "2015-08-15T23:43:05.302180Z".parse::<DateTime<UTC>>().unwrap().date(),
+        let ar0 = super::AggregateELBRecord {
+            day: "2015-08-15T23:43:05.302180Z"
+                .parse::<DateTime<UTC>>()
+                .unwrap()
+                .date(),
             client_address: *"172.16.1.6:54814".parse::<SocketAddrV4>().unwrap().ip(),
             system_name: "sys1".to_owned(),
         };
@@ -110,8 +119,8 @@ mod aggregate_records_tests {
         let ar1 = ar0.clone();
         let ar3 = ar0.clone();
 
-        aggregate_record(ar0, &mut agg);
-        aggregate_record(ar1, &mut agg);
+        super::aggregate_record(ar0, &mut agg);
+        super::aggregate_record(ar1, &mut agg);
 
         assert_eq!(agg[&ar3], 2);
     }

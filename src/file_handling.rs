@@ -5,7 +5,7 @@ use std::io::{BufRead, BufReader};
 use walkdir;
 use walkdir::{DirEntry, WalkDir};
 use elp;
-use {Aggregation, FileAggregationResult, CounterError};
+use {ELBRecordAggregation, FileAggregationResult, CounterError};
 use std::collections::HashMap;
 use record_handling;
 use std::io::Write;
@@ -15,7 +15,11 @@ pub fn file_list(dir: &Path) -> Result<Vec<DirEntry>, walkdir::Error> {
     let dir_entries = WalkDir::new(dir);
     for entry in dir_entries {
         let dir_entry = entry?;
-        if dir_entry.path().extension().map(|ext| ext.eq("log")).unwrap_or(false) {
+        if dir_entry
+               .path()
+               .extension()
+               .map(|ext| ext.eq("log"))
+               .unwrap_or(false) {
             filenames.push(dir_entry);
         }
     }
@@ -39,7 +43,7 @@ pub fn process_file(path: &Path) -> Result<FileAggregationResult, io::Error> {
 }
 
 fn read_records(path: &Path, file: &File) -> FileAggregationResult {
-    let mut agg: Aggregation = HashMap::new();
+    let mut agg: ELBRecordAggregation = HashMap::new();
     let mut file_record_count = 0;
     for possible_record in BufReader::new(file).lines() {
         file_record_count += 1;
@@ -49,8 +53,8 @@ fn read_records(path: &Path, file: &File) -> FileAggregationResult {
             record_handling::handle_parsing_result(parsing_result, &mut agg);
         } else {
             println_stderr!("Failed to read line {} in file {}.",
-                file_record_count + 1,
-                path.display());
+                            file_record_count + 1,
+                            path.display());
         }
     }
 
@@ -82,7 +86,8 @@ mod read_records {
 
         let returned_agg = super::read_records(&path, &file);
 
-        assert_eq!(returned_agg.aggregation.len(), test_common::TEST_LOG_FILE_AGGS)
+        assert_eq!(returned_agg.aggregation.len(),
+                   test_common::TEST_LOG_FILE_AGGS)
     }
 }
 
@@ -96,7 +101,9 @@ mod process_file_tests {
     #[test]
     fn process_file_should_return_a_result_with_the_correct_number_of_processed_records() {
         let num_lines = BufReader::new(File::open(test_common::TEST_LOG_FILE).unwrap())
-            .lines().collect::<Vec<_>>().len();
+            .lines()
+            .collect::<Vec<_>>()
+            .len();
         let log_path = Path::new(test_common::TEST_LOG_FILE);
 
         let file_agg_result = super::process_file(&log_path).unwrap();
@@ -160,10 +167,10 @@ mod file_list_tests {
     #[test]
     fn file_list_should_return_0_when_there_are_no_files_in_the_directory() {
         run_int_test_in_test_dir(|test_dir| {
-            let files = super::file_list(Path::new(test_dir)).unwrap();
+                                     let files = super::file_list(Path::new(test_dir)).unwrap();
 
-            assert_eq!(files.len(), 0)
-        })
+                                     assert_eq!(files.len(), 0)
+                                 })
     }
 
     pub fn run_int_test_in_test_dir<T>(test: T) -> ()
@@ -203,7 +210,10 @@ mod file_list_tests {
                 self.generator = Some(names::Generator::default());
             }
 
-            self.generator.as_mut().map(|mut g| g.next().unwrap()).unwrap()
+            self.generator
+                .as_mut()
+                .map(|mut g| g.next().unwrap())
+                .unwrap()
         }
     }
 
