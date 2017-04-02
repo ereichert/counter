@@ -66,6 +66,76 @@ fn aggregate_record(aggregate_record: AggregateELBRecord,
 }
 
 #[cfg(test)]
+mod merge_aggregates_tests {
+    extern crate rand;
+
+    use chrono::{DateTime, UTC};
+    use std::net::SocketAddrV4;
+    use self::rand::distributions::{IndependentSample, Range};
+    use std::collections::HashMap;
+
+    #[test]
+    fn merge_aggregates_updates_the_dst_aggs_according_to_the_src_aggs() {
+        let num_new_records = 100;
+        let src_agg = generate_test_agg(num_new_records);
+        let mut thread_range = rand::thread_rng();
+        let rec_range = Range::new(0, src_agg.len());
+        let mut dst_agg = HashMap::new();
+        let mut test_keys = Vec::new();
+        let num_test_records = 10;
+        for _ in 0..num_test_records {
+            let key_idx = rec_range.ind_sample(&mut thread_range);
+            let mut keys = src_agg.keys();
+            let key_of_interest = keys.nth(key_idx).unwrap();
+            let value_of_interest = src_agg.get(key_of_interest).unwrap();
+            dst_agg.insert(key_of_interest.clone(), value_of_interest.clone());
+            test_keys.push(key_of_interest);
+        }
+
+        super::merge_aggregates(&src_agg, &mut dst_agg);
+
+        assert_eq!(dst_agg.len(), src_agg.len());
+        for idx in 0..num_test_records {
+            let key = test_keys.get(idx).unwrap();
+            let dst_rec_val = *dst_agg.get(key).unwrap();
+            let src_rec_val = *src_agg.get(key).unwrap();
+            assert_eq!(dst_rec_val, src_rec_val * 2);
+        }
+    }
+
+    #[test]
+    fn merge_aggregates_insert_the_src_aggs_into_dst_aggs_when_dst_aggs_is_empty() {
+        let num_records = 50;
+        let src_agg = generate_test_agg(num_records);
+
+        let mut dst_agg = HashMap::new();
+
+        super::merge_aggregates(&src_agg, &mut dst_agg);
+
+        assert_eq!(src_agg.len(), dst_agg.len())
+    }
+
+    fn generate_test_agg(num_records: usize) -> super::ELBRecordAggregation {
+        let mut agg = HashMap::new();
+        for _ in 0..num_records {
+            let mut thread_range = rand::thread_rng();
+            let sys_id_range = Range::new(0, 7);
+            let sys_id = sys_id_range.ind_sample(&mut thread_range);
+            let record = super::AggregateELBRecord {
+                day: "2015-08-15T23:43:05.302180Z"
+                    .parse::<DateTime<UTC>>()
+                    .unwrap()
+                    .date(),
+                client_address: *"172.16.1.6:54814".parse::<SocketAddrV4>().unwrap().ip(),
+                system_name: format!("sys{}", sys_id),
+            };
+            super::aggregate_record(record, &mut agg);
+        }
+        agg
+    }
+}
+
+#[cfg(test)]
 mod aggregate_record_tests {
 
     use std::collections::HashMap;
