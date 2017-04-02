@@ -66,6 +66,31 @@ fn aggregate_record(aggregate_record: AggregateELBRecord,
 }
 
 #[cfg(test)]
+mod parse_system_name_regex_tests {
+
+    #[test]
+    fn parse_system_name_regex_returns_a_none_when_the_system_name_is_not_present() {
+        let test_uri = "http://ie.trafficland.com:80/5435/full";
+
+        let maybe_system_name = super::parse_system_name_regex(&test_uri);
+
+        assert!(maybe_system_name.is_none())
+    }
+
+    #[test]
+    fn parse_system_name_regex_returns_the_system_name_when_it_exists() {
+        let system_name = "intravenus_de_milo".to_string();
+        let test_uri = format!("http://ie.trafficland.com:80/5435/full?system={}&pubtoken=alkdjf&\
+            refreshRate=2000&rand=1480959017673",
+                               system_name);
+
+        let maybe_system_name = super::parse_system_name_regex(&test_uri);
+
+        assert_eq!(maybe_system_name, Some(system_name))
+    }
+}
+
+#[cfg(test)]
 mod merge_aggregates_tests {
     extern crate rand;
 
