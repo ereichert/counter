@@ -23,19 +23,18 @@ impl AggregateELBRecord {
 }
 
 pub fn handle_parsing_result(counter_result: ::CounterResult,
-                             aggregation: &mut ELBRecordAggregation)
+                             dst_agg: &mut ELBRecordAggregation)
                              -> () {
     match counter_result {
         Ok(elb_record) => {
             let aer =
                 AggregateELBRecord::new(elb_record.timestamp,
                                         *elb_record.client_address.ip(),
-                                        parse_system_name_regex(elb_record.request_url)
+                                        parse_system_name(elb_record.request_url)
                                             .unwrap_or_else(|| "UNDEFINED_SYSTEM".to_owned()));
-            aggregate_record(aer, aggregation);
+            aggregate_record(aer, dst_agg);
         }
         Err(::CounterError::RecordParsingErrors(ref errs)) => println_stderr!("{:?}", errs.record),
-        Err(ref err) => println_stderr!("{:?}", err),
     }
 }
 
@@ -43,9 +42,9 @@ lazy_static! {
     static ref SYSTEM_REGEX: Regex = Regex::new(r"(?i)system=([^&]*)").unwrap();
 }
 
-fn parse_system_name_regex(q: &str) -> Option<String> {
+fn parse_system_name(src_str: &str) -> Option<String> {
     SYSTEM_REGEX
-        .captures(q)
+        .captures(src_str)
         .and_then(|cap| cap.get(1).map(|sys| sys.as_str().to_string()))
 }
 
@@ -66,13 +65,119 @@ fn aggregate_record(aggregate_record: AggregateELBRecord,
 }
 
 #[cfg(test)]
-mod parse_system_name_regex_tests {
+mod handle_parsing_result_tests {
+
+    extern crate elp;
+
+    use std::collections::HashMap;
+    use chrono::{DateTime, UTC};
+    use std::net::SocketAddrV4;
+
+
+    #[test]
+    fn handle_parsing_result_should_not_alter_the_dst_agg_when_passed_a_record_parsing_error() {
+        let mut dst_agg: super::ELBRecordAggregation = HashMap::new();
+
+        let elb_record_0 = elp::ELBRecord {
+            timestamp: "2015-08-15T23:43:05.302180Z"
+                .parse::<DateTime<UTC>>()
+                .unwrap(),
+            elb_name: "elb_name",
+            client_address: "172.16.1.6:54814".parse::<SocketAddrV4>().unwrap(),
+            backend_address: "172.16.1.250:54814".parse::<SocketAddrV4>().unwrap(),
+            request_processing_time: 500_f32,
+            backend_processing_time: 250_f32,
+            response_processing_time: 250_f32,
+            elb_status_code: 200,
+            backend_status_code: 20,
+            received_bytes: 0,
+            sent_bytes: 1024 * 1024 * 10,
+            request_method: "GET",
+            request_url: "https://get.jpeg.local/1234/huge",
+            request_http_version: "HTTP/1.1",
+            user_agent: "curl",
+            ssl_cipher: "",
+            ssl_protocol: "",
+        };
+
+        super::handle_parsing_result(Ok(elb_record_0), &mut dst_agg);
+        super::handle_parsing_result(Err(::CounterError::RecordParsingErrors(
+            elp::ParsingErrors{
+                record: "2015-08-15T23:43:05.302180Z elb-name 172.16.1.6:54814 \
+                    172.16.1.5:9000 0.000039 0.145507 0.00003 200 200 0 7582 \
+                    \"GET http://some.domain.com:80/path0/path1?param0=p0&param1=p1 HTTP/1.1\"",
+                errors: Vec::new(),
+            })),
+            &mut dst_agg
+        );
+
+        assert_eq!(dst_agg.len(), 1)
+    }
+
+    #[test]
+    fn handle_parsing_result_should_update_the_dst_agg_when_passed_a_record() {
+        let mut dst_agg: super::ELBRecordAggregation = HashMap::new();
+
+        let elb_record_0 = elp::ELBRecord {
+            timestamp: "2015-08-15T23:43:05.302180Z"
+                .parse::<DateTime<UTC>>()
+                .unwrap(),
+            elb_name: "elb_name",
+            client_address: "172.16.1.6:54814".parse::<SocketAddrV4>().unwrap(),
+            backend_address: "172.16.1.250:54814".parse::<SocketAddrV4>().unwrap(),
+            request_processing_time: 500_f32,
+            backend_processing_time: 250_f32,
+            response_processing_time: 250_f32,
+            elb_status_code: 200,
+            backend_status_code: 20,
+            received_bytes: 0,
+            sent_bytes: 1024 * 1024 * 10,
+            request_method: "GET",
+            request_url: "https://get.jpeg.local/1234/huge",
+            request_http_version: "HTTP/1.1",
+            user_agent: "curl",
+            ssl_cipher: "",
+            ssl_protocol: "",
+        };
+
+        let elb_record_1 = elp::ELBRecord {
+            // different date
+            timestamp: "2016-08-15T23:43:05.302180Z"
+                .parse::<DateTime<UTC>>()
+                .unwrap(),
+            elb_name: "elb_name",
+            client_address: "172.16.1.6:54814".parse::<SocketAddrV4>().unwrap(),
+            backend_address: "172.16.1.250:54814".parse::<SocketAddrV4>().unwrap(),
+            request_processing_time: 500_f32,
+            backend_processing_time: 250_f32,
+            response_processing_time: 250_f32,
+            elb_status_code: 200,
+            backend_status_code: 20,
+            received_bytes: 0,
+            sent_bytes: 1024 * 1024 * 10,
+            request_method: "GET",
+            request_url: "https://get.jpeg.local/1234/huge",
+            request_http_version: "HTTP/1.1",
+            user_agent: "curl",
+            ssl_cipher: "",
+            ssl_protocol: "",
+        };
+
+        super::handle_parsing_result(Ok(elb_record_0), &mut dst_agg);
+        super::handle_parsing_result(Ok(elb_record_1), &mut dst_agg);
+
+        assert_eq!(dst_agg.len(), 2)
+    }
+}
+
+#[cfg(test)]
+mod parse_system_name_tests {
 
     #[test]
     fn parse_system_name_regex_returns_a_none_when_the_system_name_is_not_present() {
         let test_uri = "http://ie.trafficland.com:80/5435/full";
 
-        let maybe_system_name = super::parse_system_name_regex(&test_uri);
+        let maybe_system_name = super::parse_system_name(&test_uri);
 
         assert!(maybe_system_name.is_none())
     }
@@ -84,7 +189,7 @@ mod parse_system_name_regex_tests {
             refreshRate=2000&rand=1480959017673",
                                system_name);
 
-        let maybe_system_name = super::parse_system_name_regex(&test_uri);
+        let maybe_system_name = super::parse_system_name(&test_uri);
 
         assert_eq!(maybe_system_name, Some(system_name))
     }
