@@ -179,19 +179,19 @@ fn run_file_processor(id: usize,
                       filename_receiver: &mpsc::Receiver<ParsingMessages>,
                       aggregate_sender: &mpsc::Sender<AggregationMessages>)
                       -> () {
-    let mut done = false;
     // TODO: There needs to be a timeout here to ensure the program doesn't run forever.
     // TODO: Make use of try_rec.
     // TODO: Report a timeout back to main.
     let _ = aggregate_sender.send(AggregationMessages::Start(id));
-    while !done {
-        done = match filename_receiver.recv() {
+    loop {
+        match filename_receiver.recv() {
             Ok(ParsingMessages::Filename(filename)) => {
                 debug!("Received filename {}.", filename.path().display());
                 if let Ok(file_aggregation_result) = file_handling::process_file(filename.path()) {
                     debug!("Found {} aggregates in {}.",
                            file_aggregation_result.aggregation.len(),
                            filename.path().display());
+
                     let _ = aggregate_sender.send(
                         AggregationMessages::Aggregate(
                             file_aggregation_result.num_raw_records,
@@ -201,11 +201,9 @@ fn run_file_processor(id: usize,
                 } else {
                     // TODO: Write the error to stderr.
                 }
-
-                false
             }
             Ok(ParsingMessages::Done) |
-            Err(_) => true,
+            Err(_) => break,
         }
     }
     let _ = aggregate_sender.send(AggregationMessages::Done);
