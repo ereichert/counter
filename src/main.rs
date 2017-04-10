@@ -54,17 +54,9 @@ fn main() {
             }
 
             let mut number_of_records = 0;
-            let mut dones = 0;
-            while dones < pool.workers() {
+            let mut remaining_workers = pool.workers();
+            while remaining_workers > 0 {
                 match agg_receiver.recv() {
-                    Ok(AggregationMessages::Start(sender_id)) => {
-                        let sender = &filename_senders[sender_id];
-                        if let Some(filename) = filenames.pop() {
-                            let _ = sender.send(ParsingMessages::Filename(filename));
-                        } else {
-                            let _ = sender.send(ParsingMessages::Done);
-                        }
-                    },
                     Ok(AggregationMessages::Next(sender_id)) => {
                         let sender = &filename_senders[sender_id];
                         if let Some(filename) = filenames.pop() {
@@ -77,7 +69,7 @@ fn main() {
                         debug!("Received new_agg having {} records.", new_agg.len());
                         number_of_records += num_parsed_records;
                         record_handling::merge_aggregates(&new_agg, &mut agg);
-                        dones += 1
+                        remaining_workers -= 1
                     }
                     Err(_) => debug!("Received an error from one of the parsing workers."),
                 }
@@ -165,7 +157,6 @@ impl<'a> RuntimeContext<'a> {
 }
 
 enum AggregationMessages {
-    Start(usize),
     Aggregate(usize, HashMap<record_handling::AggregateELBRecord, i64>, usize),
     Next(usize),
 }
@@ -186,7 +177,7 @@ fn run_file_processor(id: usize,
     // TODO: Report a timeout back to main.
     let mut final_agg = HashMap::new();
     let mut num_raw_records = 0;
-    let _ = aggregate_sender.send(AggregationMessages::Start(id));
+    let _ = aggregate_sender.send(AggregationMessages::Next(id));
     loop {
         match filename_receiver.recv() {
             Ok(ParsingMessages::Filename(filename)) => {
