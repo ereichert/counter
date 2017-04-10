@@ -39,7 +39,8 @@ fn main() {
     let exit_code = match file_handling::file_list(log_location) {
         Ok(ref mut filenames) => {
             let num_files = filenames.len();
-            let mut agg: HashMap<record_handling::AggregateELBRecord, i64> = HashMap::new();
+            let mut final_agg = HashMap::new();
+            let mut number_of_raw_records = 0;
             debug!("Found {} files.", num_files);
             let mut filename_senders = Vec::new();
             let (agg_sender, agg_receiver) = mpsc::channel::<_>();
@@ -53,7 +54,6 @@ fn main() {
                            });
             }
 
-            let mut number_of_records = 0;
             let mut remaining_workers = pool.workers();
             while remaining_workers > 0 {
                 match agg_receiver.recv() {
@@ -67,8 +67,8 @@ fn main() {
                     },
                     Ok(AggregationMessages::Aggregate(num_parsed_records, new_agg, sender_id)) => {
                         debug!("Received new_agg having {} records.", new_agg.len());
-                        number_of_records += num_parsed_records;
-                        record_handling::merge_aggregates(&new_agg, &mut agg);
+                        number_of_raw_records += num_parsed_records;
+                        record_handling::merge_aggregates(&new_agg, &mut final_agg);
                         remaining_workers -= 1
                     }
                     Err(_) => debug!("Received an error from one of the parsing workers."),
@@ -76,10 +76,10 @@ fn main() {
             }
 
             debug!("Processed {} records in {} files.",
-                   number_of_records,
+                   number_of_raw_records,
                    num_files);
 
-            for (aggregate, total) in &agg {
+            for (aggregate, total) in &final_agg {
                 println!("{},{},{},{}",
                          aggregate.system_name,
                          aggregate.day.format("%Y-%m-%d").to_string(),
@@ -93,9 +93,9 @@ fn main() {
                 println!("Processed {} files having {} records in {} milliseconds and produced \
                           {} aggregates.",
                          num_files,
-                         number_of_records,
+                         number_of_raw_records,
                          time.num_milliseconds(),
-                         agg.len());
+                         final_agg.len());
             }
             pool.shutdown();
             EXIT_SUCCESS
