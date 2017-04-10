@@ -64,19 +64,21 @@ fn main() {
                         } else {
                             let _ = sender.send(ParsingMessages::Done);
                         }
-                    }
-                    Ok(AggregationMessages::Aggregate(num_parsed_records, new_agg, sender_id)) => {
-                        debug!("Received new_agg having {} records.", new_agg.len());
+                    },
+                    Ok(AggregationMessages::Next(sender_id)) => {
                         let sender = &filename_senders[sender_id];
                         if let Some(filename) = filenames.pop() {
                             let _ = sender.send(ParsingMessages::Filename(filename));
                         } else {
                             let _ = sender.send(ParsingMessages::Done);
                         }
+                    },
+                    Ok(AggregationMessages::Aggregate(num_parsed_records, new_agg, sender_id)) => {
+                        debug!("Received new_agg having {} records.", new_agg.len());
                         number_of_records += num_parsed_records;
                         record_handling::merge_aggregates(&new_agg, &mut agg);
+                        dones += 1
                     }
-                    Ok(AggregationMessages::Done) => dones += 1,
                     Err(_) => debug!("Received an error from one of the parsing workers."),
                 }
             }
@@ -165,7 +167,7 @@ impl<'a> RuntimeContext<'a> {
 enum AggregationMessages {
     Start(usize),
     Aggregate(usize, HashMap<record_handling::AggregateELBRecord, i64>, usize),
-    Done,
+    Next(usize),
 }
 
 enum ParsingMessages {
@@ -182,6 +184,8 @@ fn run_file_processor(id: usize,
     // TODO: There needs to be a timeout here to ensure the program doesn't run forever.
     // TODO: Make use of try_rec.
     // TODO: Report a timeout back to main.
+    let mut final_agg = HashMap::new();
+    let mut num_raw_records = 0;
     let _ = aggregate_sender.send(AggregationMessages::Start(id));
     loop {
         match filename_receiver.recv() {
@@ -191,12 +195,10 @@ fn run_file_processor(id: usize,
                     debug!("Found {} aggregates in {}.",
                            file_aggregation_result.aggregation.len(),
                            filename.path().display());
-
+                    num_raw_records += file_aggregation_result.num_raw_records;
+                    record_handling::merge_aggregates(&file_aggregation_result.aggregation, &mut final_agg);
                     let _ = aggregate_sender.send(
-                        AggregationMessages::Aggregate(
-                            file_aggregation_result.num_raw_records,
-                            file_aggregation_result.aggregation, id
-                        )
+                        AggregationMessages::Next(id)
                     );
                 } else {
                     // TODO: Write the error to stderr.
@@ -206,7 +208,14 @@ fn run_file_processor(id: usize,
             Err(_) => break,
         }
     }
-    let _ = aggregate_sender.send(AggregationMessages::Done);
+
+    let _ = aggregate_sender.send(
+        AggregationMessages::Aggregate(
+            num_raw_records,
+            final_agg,
+            id
+        )
+    );
 }
 
 #[cfg(test)]
