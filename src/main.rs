@@ -65,7 +65,7 @@ fn main() {
                             let _ = sender.send(ParsingMessages::Done);
                         }
                     },
-                    Ok(AggregationMessages::Aggregate(num_parsed_records, new_agg, sender_id)) => {
+                    Ok(AggregationMessages::Aggregate(num_parsed_records, new_agg)) => {
                         debug!("Received new_agg having {} records.", new_agg.len());
                         number_of_raw_records += num_parsed_records;
                         record_handling::merge_aggregates(&new_agg, &mut final_agg);
@@ -157,7 +157,7 @@ impl<'a> RuntimeContext<'a> {
 }
 
 enum AggregationMessages {
-    Aggregate(usize, HashMap<record_handling::AggregateELBRecord, i64>, usize),
+    Aggregate(usize, HashMap<record_handling::AggregateELBRecord, i64>),
     Next(usize),
 }
 
@@ -204,7 +204,6 @@ fn run_file_processor(id: usize,
         AggregationMessages::Aggregate(
             num_raw_records,
             final_agg,
-            id
         )
     );
 }
