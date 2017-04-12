@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use counter::{file_handling, record_handling};
 use std::io::Write;
 use std::sync::mpsc;
+use std::time::Duration;
 use walkdir::DirEntry;
 
 const EXIT_SUCCESS: i32 = 0;
@@ -64,7 +65,7 @@ fn main() {
                         } else {
                             let _ = sender.send(ParsingMessages::Done);
                         }
-                    },
+                    }
                     Ok(AggregationMessages::Aggregate(num_parsed_records, new_agg)) => {
                         debug!("Received new_agg having {} records.", new_agg.len());
                         number_of_raw_records += num_parsed_records;
@@ -166,20 +167,16 @@ enum ParsingMessages {
     Done,
 }
 
-// TODO: Test this.
-// TODO: Use a real file.
 fn run_file_processor(id: usize,
                       filename_receiver: &mpsc::Receiver<ParsingMessages>,
                       aggregate_sender: &mpsc::Sender<AggregationMessages>)
                       -> () {
-    // TODO: There needs to be a timeout here to ensure the program doesn't run forever.
-    // TODO: Make use of try_rec.
-    // TODO: Report a timeout back to main.
     let mut final_agg = HashMap::new();
     let mut num_raw_records = 0;
     let _ = aggregate_sender.send(AggregationMessages::Next(id));
+    let timeout = Duration::from_millis(1000);
     loop {
-        match filename_receiver.recv() {
+        match filename_receiver.recv_timeout(timeout) {
             Ok(ParsingMessages::Filename(filename)) => {
                 debug!("Received filename {}.", filename.path().display());
                 if let Ok(file_aggregation_result) = file_handling::process_file(filename.path()) {
@@ -187,25 +184,56 @@ fn run_file_processor(id: usize,
                            file_aggregation_result.aggregation.len(),
                            filename.path().display());
                     num_raw_records += file_aggregation_result.num_raw_records;
-                    record_handling::merge_aggregates(&file_aggregation_result.aggregation, &mut final_agg);
-                    let _ = aggregate_sender.send(
-                        AggregationMessages::Next(id)
-                    );
+                    record_handling::merge_aggregates(&file_aggregation_result.aggregation,
+                                                      &mut final_agg);
+                    let _ = aggregate_sender.send(AggregationMessages::Next(id));
                 } else {
                     // TODO: Write the error to stderr.
                 }
             }
-            Ok(ParsingMessages::Done) |
-            Err(_) => break,
+            Ok(ParsingMessages::Done) => break,
+            Err(_) => break,// TODO: Send error to main
         }
     }
 
-    let _ = aggregate_sender.send(
-        AggregationMessages::Aggregate(
-            num_raw_records,
-            final_agg,
-        )
-    );
+    let _ = aggregate_sender.send(AggregationMessages::Aggregate(num_raw_records, final_agg));
+}
+
+#[cfg(test)]
+mod file_processor_tests {
+    use std::sync::mpsc;
+
+    #[test]
+    fn sends_the_final_agg_after_receiving_the_done_message() {
+        let (filename_sender, filename_receiver) = mpsc::channel();
+        let (agg_sender, agg_receiver) = mpsc::channel();
+        let _ = filename_sender.send(super::ParsingMessages::Done);
+        super::run_file_processor(1, &filename_receiver, &agg_sender);
+        // Dump the AggregationMessages::Next message sent at startup.
+        let _ = agg_receiver.recv();
+
+        match agg_receiver.recv().unwrap() {
+            super::AggregationMessages::Aggregate(size, agg) => {
+                assert_eq!(size, 0);
+                assert_eq!(agg.len(), 0);
+            }
+            super::AggregationMessages::Next(_) => panic!("Received an unexpected Next message."),
+        }
+    }
+
+    #[test]
+    fn sends_a_next_message_after_starting_up() {
+        let (filename_sender, filename_receiver) = mpsc::channel();
+        let (agg_sender, agg_receiver) = mpsc::channel();
+        let _ = filename_sender.send(super::ParsingMessages::Done);
+        super::run_file_processor(1, &filename_receiver, &agg_sender);
+
+        match agg_receiver.recv().unwrap() {
+            super::AggregationMessages::Next(id) => assert_eq!(id, 1),
+            super::AggregationMessages::Aggregate(_, _) =>
+                panic!("Received an unexpected Aggregate message."),
+        }
+    }
 }
 
 #[cfg(test)]
