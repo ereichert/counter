@@ -65,19 +65,11 @@ fn read_records(path: &Path, file: &File) -> FileAggregationResult {
 }
 
 #[cfg(test)]
-mod test_common {
-
-    // DO NOT MODIFY THESE PATHS. USE SYMLINKS TO REDIRECT TO SOMETHING ELSE.
-    pub const TEST_LOG_FILE: &'static str = "./test_artifacts/test_elb_log_file.log";
-    pub const TEST_LOG_FILE_AGGS: usize = 88;
-}
-
-#[cfg(test)]
 mod read_records {
 
     use std::fs::File;
     use std::path::Path;
-    use super::test_common;
+    use ::test_common;
 
     #[test]
     fn read_records() {
@@ -96,7 +88,7 @@ mod process_file_tests {
     use std::path::Path;
     use std::fs::File;
     use std::io::{BufRead, BufReader};
-    use super::test_common;
+    use ::test_common;
 
     #[test]
     fn process_file_should_return_a_result_with_the_correct_number_of_processed_records() {

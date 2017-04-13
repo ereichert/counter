@@ -54,3 +54,6 @@ impl<'a> Error for CounterError<'a> {
         }
     }
 }
+
+#[cfg(test)]
+pub mod test_common;
