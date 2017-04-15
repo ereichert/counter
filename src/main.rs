@@ -9,16 +9,14 @@ extern crate chrono;
 extern crate counter;
 extern crate num_cpus;
 extern crate scoped_pool as sp;
-extern crate walkdir;
 
 use std::path::Path;
 use chrono::{DateTime, UTC};
 use std::collections::HashMap;
 use counter::{file_handling, record_handling};
+use counter::file_handling::{AggregationMessages, FileHandlingMessages};
 use std::io::Write;
 use std::sync::mpsc;
-use std::time::Duration;
-use walkdir::DirEntry;
 
 const EXIT_SUCCESS: i32 = 0;
 const EXIT_FAILURE: i32 = 1;
@@ -43,27 +41,28 @@ fn main() {
             let mut final_agg = HashMap::new();
             let mut number_of_raw_records = 0;
             debug!("Found {} files.", num_files);
-            let mut filename_senders = Vec::new();
-            let (agg_sender, agg_receiver) = mpsc::channel::<_>();
+            let mut file_handling_msg_senders = Vec::new();
+            let (agg_msg_sender, agg_msg_receiver) = mpsc::channel::<_>();
             let pool = sp::Pool::new(num_cpus::get());
             for sender_id in 0..pool.workers() {
-                let (filename_sender, filename_receiver) = mpsc::channel::<_>();
-                filename_senders.push(filename_sender);
-                let cloned_agg_sender = agg_sender.clone();
+                let (file_handling_msg_sender, file_handling_msg_receiver) = mpsc::channel::<_>();
+                file_handling_msg_senders.push(file_handling_msg_sender);
+                let cloned_agg_msg_sender = agg_msg_sender.clone();
                 pool.spawn(move || {
-                               run_file_processor(sender_id, &filename_receiver, &cloned_agg_sender)
+                               file_handling::FileAggregator::new(sender_id)
+                                   .run(&file_handling_msg_receiver, &cloned_agg_msg_sender);
                            });
             }
 
             let mut remaining_workers = pool.workers();
             while remaining_workers > 0 {
-                match agg_receiver.recv() {
+                match agg_msg_receiver.recv() {
                     Ok(AggregationMessages::Next(sender_id)) => {
-                        let sender = &filename_senders[sender_id];
+                        let sender = &file_handling_msg_senders[sender_id];
                         if let Some(filename) = filenames.pop() {
-                            let _ = sender.send(ParsingMessages::Filename(filename));
+                            let _ = sender.send(FileHandlingMessages::Filename(filename));
                         } else {
-                            let _ = sender.send(ParsingMessages::Done);
+                            let _ = sender.send(FileHandlingMessages::Done);
                         }
                     }
                     Ok(AggregationMessages::Aggregate(num_parsed_records, new_agg)) => {
@@ -154,85 +153,6 @@ impl<'a> RuntimeContext<'a> {
 
     fn log_location(&self) -> &Path {
         Path::new(self.arg_matches.value_of(LOG_LOCATION_ARG).unwrap())
-    }
-}
-
-enum AggregationMessages {
-    Aggregate(usize, HashMap<record_handling::AggregateELBRecord, i64>),
-    Next(usize),
-}
-
-enum ParsingMessages {
-    Filename(DirEntry),
-    Done,
-}
-
-fn run_file_processor(id: usize,
-                      filename_receiver: &mpsc::Receiver<ParsingMessages>,
-                      aggregate_sender: &mpsc::Sender<AggregationMessages>)
-                      -> () {
-    let mut final_agg = HashMap::new();
-    let mut num_raw_records = 0;
-    let _ = aggregate_sender.send(AggregationMessages::Next(id));
-    let timeout = Duration::from_millis(1000);
-    loop {
-        match filename_receiver.recv_timeout(timeout) {
-            Ok(ParsingMessages::Filename(filename)) => {
-                debug!("Received filename {}.", filename.path().display());
-                if let Ok(file_aggregation_result) = file_handling::process_file(filename.path()) {
-                    debug!("Found {} aggregates in {}.",
-                           file_aggregation_result.aggregation.len(),
-                           filename.path().display());
-                    num_raw_records += file_aggregation_result.num_raw_records;
-                    record_handling::merge_aggregates(&file_aggregation_result.aggregation,
-                                                      &mut final_agg);
-                    let _ = aggregate_sender.send(AggregationMessages::Next(id));
-                } else {
-                    // TODO: Write the error to stderr.
-                }
-            }
-            Ok(ParsingMessages::Done) => break,
-            Err(_) => break,// TODO: Send error to main
-        }
-    }
-
-    let _ = aggregate_sender.send(AggregationMessages::Aggregate(num_raw_records, final_agg));
-}
-
-#[cfg(test)]
-mod file_processor_tests {
-    use std::sync::mpsc;
-
-    #[test]
-    fn sends_the_final_agg_after_receiving_the_done_message() {
-        let (filename_sender, filename_receiver) = mpsc::channel();
-        let (agg_sender, agg_receiver) = mpsc::channel();
-        let _ = filename_sender.send(super::ParsingMessages::Done);
-        super::run_file_processor(1, &filename_receiver, &agg_sender);
-        // Dump the AggregationMessages::Next message sent at startup.
-        let _ = agg_receiver.recv();
-
-        match agg_receiver.recv().unwrap() {
-            super::AggregationMessages::Aggregate(size, agg) => {
-                assert_eq!(size, 0);
-                assert_eq!(agg.len(), 0);
-            }
-            super::AggregationMessages::Next(_) => panic!("Received an unexpected Next message."),
-        }
-    }
-
-    #[test]
-    fn sends_a_next_message_after_starting_up() {
-        let (filename_sender, filename_receiver) = mpsc::channel();
-        let (agg_sender, agg_receiver) = mpsc::channel();
-        let _ = filename_sender.send(super::ParsingMessages::Done);
-        super::run_file_processor(1, &filename_receiver, &agg_sender);
-
-        match agg_receiver.recv().unwrap() {
-            super::AggregationMessages::Next(id) => assert_eq!(id, 1),
-            super::AggregationMessages::Aggregate(_, _) =>
-                panic!("Received an unexpected Aggregate message."),
-        }
     }
 }
 

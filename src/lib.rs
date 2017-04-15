@@ -26,7 +26,7 @@ pub mod file_handling;
 pub mod record_handling;
 
 pub type ELBRecordAggregation = HashMap<record_handling::AggregateELBRecord, i64>;
-pub struct FileAggregationResult {
+pub struct FileAggregation {
     pub num_raw_records: usize,
     pub aggregation: ELBRecordAggregation,
 }
