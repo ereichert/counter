@@ -1,16 +1,16 @@
-use std::path::Path;
 use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader};
 use walkdir;
 use walkdir::{DirEntry, WalkDir};
-use elp;
-use {ELBRecordAggregation, FileAggregation, CounterError};
+use ELBRecordAggregation;
 use std::collections::HashMap;
 use record_handling;
 use std::io::Write;
 use std::sync::mpsc;
+use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
+use std::path::Path;
 
 pub fn file_list(dir: &Path) -> Result<Vec<DirEntry>, walkdir::Error> {
     let mut filenames = Vec::new();
@@ -39,6 +39,14 @@ pub enum FileHandlingMessages {
     Done,
 }
 
+enum FileHandlingErrors<'a> {
+    FileReadError { path: &'a Path, err: io::Error },
+    LineReadError {
+        path: &'a Path,
+        line_nums: Vec<usize>,
+    },
+}
+
 pub struct FileAggregator {
     id: usize,
     num_raw_records: usize,
@@ -58,17 +66,40 @@ impl FileAggregator {
                filename_receiver: &mpsc::Receiver<FileHandlingMessages>,
                aggregate_sender: &mpsc::Sender<AggregationMessages>)
                -> () {
+        // TODO: Consider channel errors. You should probably refactor the
+        // Err(RecvTimeoutError::Disconnected) =>  in the loop and use it to handle all of the send
+        // errors. In some cases you should try to send a message to main and attempt to gracefully
+        // exit. In other cases you have to panic. The last thing you want are incorrect results.
+        // You also may want to attempt to send the filename back to main and try to process the
+        // file again...maybe.
         let _ = aggregate_sender.send(AggregationMessages::Next(self.id));
         let timeout = Duration::from_millis(10000);
         loop {
             match filename_receiver.recv_timeout(timeout) {
                 Ok(FileHandlingMessages::Filename(filename)) => {
-                    debug!("Received filename {}.", filename.path().display());
-                    self.aggregate_file(&filename);
+                    self.aggregate_file(filename.path());
                     let _ = aggregate_sender.send(AggregationMessages::Next(self.id));
                 }
                 Ok(FileHandlingMessages::Done) => break,
-                Err(_) => break,// TODO: Send error to main
+                Err(RecvTimeoutError::Timeout) => {
+                    debug!("A timeout occurred while FileAggregator {} was waiting \
+                    for a filename. This may mean that the controller is having a hard time \
+                    keeping up. But in most cases it just means there are no more files \
+                    to process and this FileAggregator is just waiting for the shut down \
+                    message.",
+                           self.id)
+                }
+                Err(RecvTimeoutError::Disconnected) => {
+                    // If this channel has disconnected there's no guarantee the other
+                    // channels are still connected. This is very bad and is going to produce
+                    // bad aggregates. Therefore, we write to stderr so the message can be captured
+                    // and we kill the thread.
+                    let msg = format!("FileAggregator {} has disconnected from the controller.\
+                            This is unrecoverable error and should be reported to the developers.",
+                                      self.id);
+                    println_stderr!("{}", msg);
+                    panic!(msg);
+                }
             }
         }
 
@@ -76,53 +107,64 @@ impl FileAggregator {
                                                                      self.final_agg));
     }
 
-    fn aggregate_file(&mut self, filename: &DirEntry) -> () {
-        if let Ok(file_aggregation_result) = self.process_file(filename.path()) {
-            debug!("Found {} aggregates in {}.",
-                   file_aggregation_result.aggregation.len(),
-                   filename.path().display());
-            self.num_raw_records += file_aggregation_result.num_raw_records;
-            record_handling::merge_aggregates(&file_aggregation_result.aggregation,
-                                              &mut self.final_agg);
-        } else {
-            println_stderr!("Failed to read file {}.", filename.path().display());
+    fn aggregate_file(&mut self, file_path: &Path) -> () {
+        debug!("FileAggregator {} received filename {}.",
+               self.id,
+               file_path.display());
+        match self.read_file(file_path) {
+            Err(FileHandlingErrors::FileReadError { path, err }) => {
+                println_stderr!("Failed to read file {} with error {}. ",
+                                path.display(),
+                                err)
+            }
+            Err(FileHandlingErrors::LineReadError { path, line_nums }) => {
+                println_stderr!("Failed to read lines {:?} from file {}. ",
+                                line_nums,
+                                path.display())
+            }
+            Ok(()) => {}
         }
     }
 
-    fn process_file(&self, path: &Path) -> Result<FileAggregation, io::Error> {
+    fn read_file<'a>(&mut self, path: &'a Path) -> Result<(), FileHandlingErrors<'a>> {
         debug!("Processing file {}.", path.display());
         match File::open(path) {
-            Ok(file) => {
-                let aggregation_result = self.read_records(path, &file);
-                debug!("Found {} records in file {}.",
-                       aggregation_result.num_raw_records,
-                       path.display());
-                Ok(aggregation_result)
+            Ok(file) => self.read_records(path, &file),
+            Err(err) => {
+                Err(FileHandlingErrors::FileReadError {
+                        path: path,
+                        err: err,
+                    })
             }
-
-            Err(err) => Err(err),
         }
     }
 
-    fn read_records(&self, path: &Path, file: &File) -> FileAggregation {
-        let mut agg: ELBRecordAggregation = HashMap::new();
-        let mut file_record_count = 0;
-        for possible_record in BufReader::new(file).lines() {
-            file_record_count += 1;
+    fn read_records<'a>(&mut self,
+                        path: &'a Path,
+                        file: &File)
+                        -> Result<(), FileHandlingErrors<'a>> {
+        let mut bad_line_nums = Vec::new();
+        let mut records_processed = 0;
+        for (line_num, possible_record) in BufReader::new(file).lines().enumerate() {
             if let Ok(record) = possible_record {
-                let parsing_result = elp::parse_record(&record)
-                    .map_err(CounterError::RecordParsingErrors);
-                record_handling::handle_parsing_result(parsing_result, &mut agg);
+                record_handling::try_parse_record(&record, &mut self.final_agg);
+                records_processed += 1;
             } else {
-                println_stderr!("Failed to read line {} in file {}.",
-                                file_record_count + 1,
-                                path.display());
+                bad_line_nums.push(line_num);
             }
         }
 
-        FileAggregation {
-            num_raw_records: file_record_count,
-            aggregation: agg,
+        debug!("Found {} records in file {}.",
+               records_processed,
+               path.display());
+        self.num_raw_records += records_processed;
+        if bad_line_nums.is_empty() {
+            Ok(())
+        } else {
+            Err(FileHandlingErrors::LineReadError {
+                    line_nums: bad_line_nums,
+                    path: path,
+                })
         }
     }
 }
@@ -131,7 +173,6 @@ impl FileAggregator {
 mod file_aggregator_run_tests {
 
     use std::sync::mpsc;
-    use test_common::TEST_LOG_FILE;
 
     #[test]
     fn sends_the_final_agg_after_receiving_the_done_message() {
@@ -180,12 +221,12 @@ mod file_aggregator_read_records {
     fn read_records() {
         let path = Path::new(test_common::TEST_LOG_FILE);
         let file = File::open(&path).unwrap();
-        let file_aggregator = super::FileAggregator::new(0);
+        let mut file_aggregator = super::FileAggregator::new(0);
 
 
-        let returned_agg = file_aggregator.read_records(&path, &file);
+        let _ = file_aggregator.read_records(&path, &file);
 
-        assert_eq!(returned_agg.aggregation.len(),
+        assert_eq!(file_aggregator.final_agg.len(),
                    test_common::TEST_LOG_FILE_AGGS)
     }
 }
@@ -204,19 +245,19 @@ mod file_aggregator_process_file_tests {
             .collect::<Vec<_>>()
             .len();
         let log_path = Path::new(test_common::TEST_LOG_FILE);
-        let file_aggregator = super::FileAggregator::new(0);
+        let mut file_aggregator = super::FileAggregator::new(0);
 
-        let file_agg_result = file_aggregator.process_file(&log_path).unwrap();
+        let _ = file_aggregator.read_file(&log_path);
 
-        assert_eq!(file_agg_result.num_raw_records, num_lines)
+        assert_eq!(file_aggregator.num_raw_records, num_lines)
     }
 
     #[test]
     fn process_file_should_return_an_error_when_the_file_cannot_be_opened() {
         let log_path = Path::new("bad_filename");
-        let file_aggregator = super::FileAggregator::new(0);
+        let mut file_aggregator = super::FileAggregator::new(0);
 
-        let result = file_aggregator.process_file(&log_path);
+        let result = file_aggregator.read_file(&log_path);
 
         assert!(result.is_err())
     }

@@ -4,6 +4,7 @@ use chrono::{Date, DateTime, UTC};
 use std::net::Ipv4Addr;
 use regex::Regex;
 use ELBRecordAggregation;
+use elp;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct AggregateELBRecord {
@@ -22,10 +23,8 @@ impl AggregateELBRecord {
     }
 }
 
-pub fn handle_parsing_result(counter_result: ::CounterResult,
-                             dst_agg: &mut ELBRecordAggregation)
-                             -> () {
-    match counter_result {
+pub fn try_parse_record(possible_record: &str, dst_agg: &mut ELBRecordAggregation) -> () {
+    match elp::parse_record(possible_record) {
         Ok(elb_record) => {
             let aer =
                 AggregateELBRecord::new(elb_record.timestamp,
@@ -34,7 +33,7 @@ pub fn handle_parsing_result(counter_result: ::CounterResult,
                                             .unwrap_or_else(|| "UNDEFINED_SYSTEM".to_owned()));
             aggregate_record(aer, dst_agg);
         }
-        Err(::CounterError::RecordParsingErrors(ref errs)) => println_stderr!("{:?}", errs.record),
+        Err(ref errs) => println_stderr!("{:?}", errs.record),
     }
 }
 
@@ -70,101 +69,30 @@ mod handle_parsing_result_tests {
     extern crate elp;
 
     use std::collections::HashMap;
-    use chrono::{DateTime, UTC};
-    use std::net::SocketAddrV4;
 
-
-    #[test]
-    fn handle_parsing_result_should_not_alter_the_dst_agg_when_passed_a_record_parsing_error() {
-        let mut dst_agg: super::ELBRecordAggregation = HashMap::new();
-
-        let elb_record_0 = elp::ELBRecord {
-            timestamp: "2015-08-15T23:43:05.302180Z"
-                .parse::<DateTime<UTC>>()
-                .unwrap(),
-            elb_name: "elb_name",
-            client_address: "172.16.1.6:54814".parse::<SocketAddrV4>().unwrap(),
-            backend_address: "172.16.1.250:54814".parse::<SocketAddrV4>().unwrap(),
-            request_processing_time: 500_f32,
-            backend_processing_time: 250_f32,
-            response_processing_time: 250_f32,
-            elb_status_code: 200,
-            backend_status_code: 20,
-            received_bytes: 0,
-            sent_bytes: 1024 * 1024 * 10,
-            request_method: "GET",
-            request_url: "https://get.jpeg.local/1234/huge",
-            request_http_version: "HTTP/1.1",
-            user_agent: "curl",
-            ssl_cipher: "",
-            ssl_protocol: "",
-        };
-
-        super::handle_parsing_result(Ok(elb_record_0), &mut dst_agg);
-        super::handle_parsing_result(Err(::CounterError::RecordParsingErrors(
-            elp::ParsingErrors{
-                record: "2015-08-15T23:43:05.302180Z elb-name 172.16.1.6:54814 \
+    const GOOD_RECORD0: &'static str = "2015-08-15T23:43:05.302180Z elb-name 172.16.1.6:54814 \
                     172.16.1.5:9000 0.000039 0.145507 0.00003 200 200 0 7582 \
-                    \"GET http://some.domain.com:80/path0/path1?param0=p0&param1=p1 HTTP/1.1\"",
-                errors: Vec::new(),
-            })),
-            &mut dst_agg
-        );
+                    \"GET http://some.domain.com:80/path0/path1?param0=p0&param1=p1 HTTP/1.1\"";
+    const GOOD_RECORD1: &'static str = "2016-08-15T23:43:05.302180Z elb-name 172.16.1.6:54814 \
+                    172.16.1.5:9000 0.000039 0.145507 0.00003 200 200 0 7582 \
+                    \"GET http://some.domain.com:80/path0/path1?param0=p0&param1=p1 HTTP/1.1\"";
+    #[test]
+    fn handle_parsing_result_should_not_alter_the_dst_agg_when_passed_bad_records() {
+        let mut dst_agg: super::ELBRecordAggregation = HashMap::new();
+        let bad_record = "";
+
+        super::try_parse_record(GOOD_RECORD0, &mut dst_agg);
+        super::try_parse_record(bad_record, &mut dst_agg);
 
         assert_eq!(dst_agg.len(), 1)
     }
 
     #[test]
-    fn handle_parsing_result_should_update_the_dst_agg_when_passed_a_record() {
+    fn handle_parsing_result_should_update_the_dst_agg_when_passed_good_records() {
         let mut dst_agg: super::ELBRecordAggregation = HashMap::new();
 
-        let elb_record_0 = elp::ELBRecord {
-            timestamp: "2015-08-15T23:43:05.302180Z"
-                .parse::<DateTime<UTC>>()
-                .unwrap(),
-            elb_name: "elb_name",
-            client_address: "172.16.1.6:54814".parse::<SocketAddrV4>().unwrap(),
-            backend_address: "172.16.1.250:54814".parse::<SocketAddrV4>().unwrap(),
-            request_processing_time: 500_f32,
-            backend_processing_time: 250_f32,
-            response_processing_time: 250_f32,
-            elb_status_code: 200,
-            backend_status_code: 20,
-            received_bytes: 0,
-            sent_bytes: 1024 * 1024 * 10,
-            request_method: "GET",
-            request_url: "https://get.jpeg.local/1234/huge",
-            request_http_version: "HTTP/1.1",
-            user_agent: "curl",
-            ssl_cipher: "",
-            ssl_protocol: "",
-        };
-
-        let elb_record_1 = elp::ELBRecord {
-            // different date
-            timestamp: "2016-08-15T23:43:05.302180Z"
-                .parse::<DateTime<UTC>>()
-                .unwrap(),
-            elb_name: "elb_name",
-            client_address: "172.16.1.6:54814".parse::<SocketAddrV4>().unwrap(),
-            backend_address: "172.16.1.250:54814".parse::<SocketAddrV4>().unwrap(),
-            request_processing_time: 500_f32,
-            backend_processing_time: 250_f32,
-            response_processing_time: 250_f32,
-            elb_status_code: 200,
-            backend_status_code: 20,
-            received_bytes: 0,
-            sent_bytes: 1024 * 1024 * 10,
-            request_method: "GET",
-            request_url: "https://get.jpeg.local/1234/huge",
-            request_http_version: "HTTP/1.1",
-            user_agent: "curl",
-            ssl_cipher: "",
-            ssl_protocol: "",
-        };
-
-        super::handle_parsing_result(Ok(elb_record_0), &mut dst_agg);
-        super::handle_parsing_result(Ok(elb_record_1), &mut dst_agg);
+        super::try_parse_record(GOOD_RECORD0, &mut dst_agg);
+        super::try_parse_record(GOOD_RECORD1, &mut dst_agg);
 
         assert_eq!(dst_agg.len(), 2)
     }
