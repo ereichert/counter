@@ -44,8 +44,8 @@ fn main() {
             let final_agg = runner.run(num_cpus::get(), filenames);
 
             debug!("Processed {} records in {} files.",
-                   final_agg.num_raw_records,
-                   num_files);
+            final_agg.num_raw_records,
+            num_files);
 
             for (aggregate, total) in &final_agg.aggregation {
                 println!("{},{},{},{}",
@@ -156,13 +156,13 @@ impl<'a> RuntimeContext<'a> {
     fn new_app<'b>() -> clap::App<'a, 'b> {
         clap::App::new("counter")
             .arg(clap::Arg::with_name(LOG_LOCATION_ARG)
-                     .required(true)
-                     .help("The root directory when the log files are stored."))
+                .required(true)
+                .help("The root directory when the log files are stored."))
             .arg(clap::Arg::with_name(BENCHMARK_ARG)
-                     .required(false)
-                     .help("Time the run and provide statistics at the end of the run.")
-                     .long("benchmark")
-                     .short("b"))
+                .required(false)
+                .help("Time the run and provide statistics at the end of the run.")
+                .long("benchmark")
+                .short("b"))
     }
 
     fn run_benchmark(&self) -> bool {
