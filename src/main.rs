@@ -55,7 +55,7 @@ fn main() {
             }
 
             let mut remaining_workers = pool.workers();
-            while remaining_workers > 0 {
+            loop {
                 match agg_msg_receiver.recv() {
                     Ok(AggregationMessages::Next(sender_id)) => {
                         let sender = &file_handling_msg_senders[sender_id];
@@ -69,7 +69,10 @@ fn main() {
                         debug!("Received new_agg having {} records.", new_agg.len());
                         number_of_raw_records += num_parsed_records;
                         record_handling::merge_aggregates(&new_agg, &mut final_agg);
-                        remaining_workers -= 1
+                        remaining_workers -= 1;
+                        if remaining_workers == 0 {
+                            break
+                        }
                     }
                     Err(_) => debug!("Received an error from one of the parsing workers."),
                 }
