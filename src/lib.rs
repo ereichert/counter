@@ -6,6 +6,8 @@ extern crate chrono;
 extern crate regex;
 #[macro_use]
 extern crate lazy_static;
+extern crate scoped_pool as sp;
+extern crate num_cpus;
 
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -24,6 +26,7 @@ macro_rules! println_stderr(
 
 pub mod file_handling;
 pub mod record_handling;
+pub mod aggregation_control;
 
 pub type ELBRecordAggregation = HashMap<record_handling::AggregateELBRecord, i64>;
 pub struct FileAggregation {

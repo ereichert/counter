@@ -12,11 +12,11 @@ extern crate scoped_pool as sp;
 
 use std::path::Path;
 use chrono::{DateTime, UTC};
-use std::collections::HashMap;
-use counter::{file_handling, record_handling};
-use counter::file_handling::{AggregationMessages, FileHandlingMessages};
+use counter::file_handling;
+use counter::aggregation_control::AggregationController;
 use std::io::Write;
 use std::sync::mpsc;
+
 
 const EXIT_SUCCESS: i32 = 0;
 const EXIT_FAILURE: i32 = 1;
@@ -38,8 +38,6 @@ fn main() {
     let exit_code = match file_handling::file_list(log_location) {
         Ok(ref mut filenames) => {
             let num_files = filenames.len();
-            let mut final_agg = HashMap::new();
-            let mut number_of_raw_records = 0;
             debug!("Found {} files.", num_files);
             let mut file_handling_msg_senders = Vec::new();
             let (agg_msg_sender, agg_msg_receiver) = mpsc::channel::<_>();
@@ -54,35 +52,15 @@ fn main() {
                            });
             }
 
-            let mut remaining_workers = pool.workers();
-            loop {
-                match agg_msg_receiver.recv() {
-                    Ok(AggregationMessages::Next(sender_id)) => {
-                        let sender = &file_handling_msg_senders[sender_id];
-                        if let Some(filename) = filenames.pop() {
-                            let _ = sender.send(FileHandlingMessages::Filename(filename));
-                        } else {
-                            let _ = sender.send(FileHandlingMessages::Done);
-                        }
-                    }
-                    Ok(AggregationMessages::Aggregate(num_parsed_records, new_agg)) => {
-                        debug!("Received new_agg having {} records.", new_agg.len());
-                        number_of_raw_records += num_parsed_records;
-                        record_handling::merge_aggregates(&new_agg, &mut final_agg);
-                        remaining_workers -= 1;
-                        if remaining_workers == 0 {
-                            break
-                        }
-                    }
-                    Err(_) => debug!("Received an error from one of the parsing workers."),
-                }
-            }
+            let mut agg_control = AggregationController::new(agg_msg_receiver,
+                                                             file_handling_msg_senders);
+            let final_agg = agg_control.run_aggregation(filenames);
 
             debug!("Processed {} records in {} files.",
-                   number_of_raw_records,
+                   final_agg.num_raw_records,
                    num_files);
 
-            for (aggregate, total) in &final_agg {
+            for (aggregate, total) in &final_agg.aggregation {
                 println!("{},{},{},{}",
                          aggregate.system_name,
                          aggregate.day.format("%Y-%m-%d").to_string(),
@@ -96,9 +74,9 @@ fn main() {
                 println!("Processed {} files having {} records in {} milliseconds and produced \
                           {} aggregates.",
                          num_files,
-                         number_of_raw_records,
+                         final_agg.num_raw_records,
                          time.num_milliseconds(),
-                         final_agg.len());
+                         final_agg.aggregation.len());
             }
             pool.shutdown();
             EXIT_SUCCESS
