@@ -18,10 +18,10 @@ pub fn file_list(dir: &Path) -> Result<Vec<PathBuf>, walkdir::Error> {
     for entry in dir_entries {
         let dir_entry = entry?;
         if dir_entry
-               .path()
-               .extension()
-               .map(|ext| ext.eq("log"))
-               .unwrap_or(false) {
+            .path()
+            .extension()
+            .map(|ext| ext.eq("log"))
+            .unwrap_or(false) {
             filenames.push(dir_entry.path().to_path_buf());
         }
     }
@@ -91,7 +91,7 @@ impl FileAggregator {
                     keeping up. But in most cases it just means there are no more files \
                     to process and this FileAggregator is just waiting for the shut down \
                     message.",
-                           self.id)
+                    self.id)
                 }
                 Err(RecvTimeoutError::Disconnected) => {
                     // If this channel has disconnected there's no guarantee the other
@@ -113,8 +113,8 @@ impl FileAggregator {
 
     fn aggregate_file(&mut self, file_path: &Path) -> () {
         debug!("FileAggregator {} received filename {}.",
-               self.id,
-               file_path.display());
+        self.id,
+        file_path.display());
         match self.read_file(file_path) {
             Err(FileHandlingErrors::FileReadError { path, err }) => {
                 println_stderr!("Failed to read file {} with error {}. ",
@@ -136,9 +136,9 @@ impl FileAggregator {
             Ok(file) => self.read_records(path, &file),
             Err(err) => {
                 Err(FileHandlingErrors::FileReadError {
-                        path: path,
-                        err: err,
-                    })
+                    path: path,
+                    err: err,
+                })
             }
         }
     }
@@ -159,16 +159,16 @@ impl FileAggregator {
         }
 
         debug!("Found {} records in file {}.",
-               records_processed,
-               path.display());
+        records_processed,
+        path.display());
         self.num_raw_records += records_processed;
         if bad_line_nums.is_empty() {
             Ok(())
         } else {
             Err(FileHandlingErrors::LineReadError {
-                    line_nums: bad_line_nums,
-                    path: path,
-                })
+                line_nums: bad_line_nums,
+                path: path,
+            })
         }
     }
 }
@@ -231,7 +231,7 @@ mod file_aggregator_read_records {
         let _ = file_aggregator.read_records(&path, &file);
 
         assert_eq!(file_aggregator.final_agg.len(),
-                   test_common::TEST_LOG_FILE_AGGS)
+        test_common::TEST_LOG_FILE_AGGS)
     }
 }
 
@@ -313,10 +313,10 @@ mod file_list_tests {
     #[test]
     fn file_list_should_return_0_when_there_are_no_files_in_the_directory() {
         run_int_test_in_test_dir(|test_dir| {
-                                     let files = super::file_list(Path::new(test_dir)).unwrap();
+            let files = super::file_list(Path::new(test_dir)).unwrap();
 
-                                     assert_eq!(files.len(), 0)
-                                 })
+            assert_eq!(files.len(), 0)
+        })
     }
 
     pub fn run_int_test_in_test_dir<T>(test: T) -> ()
