@@ -70,12 +70,6 @@ impl FileAggregator {
                filename_receiver: &mpsc::Receiver<FileHandlingMessages>,
                aggregate_sender: &mpsc::Sender<AggregationMessages>)
                -> () {
-        // TODO: Consider channel errors. You should probably refactor the
-        // Err(RecvTimeoutError::Disconnected) =>  in the loop and use it to handle all of the send
-        // errors. In some cases you should try to send a message to main and attempt to gracefully
-        // exit. In other cases you have to panic. The last thing you want are incorrect results.
-        // You also may want to attempt to send the filename back to main and try to process the
-        // file again...maybe.
         let _ = aggregate_sender.send(AggregationMessages::Next(self.id));
         let timeout = Duration::from_millis(10000);
         loop {

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+ARGS="${@}"
+VAGRANT_CWD=vagrant vagrant ${ARGS}

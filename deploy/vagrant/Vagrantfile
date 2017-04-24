@@ -1,0 +1,10 @@
+Vagrant.configure('2') do |config|
+  config.vm.box = 'centos/6'
+  config.vm.box_version = '1609.01'
+  config.vm.provision :shell, path: 'bootstrap.sh'
+
+  config.vm.define 'counter'
+  config.vm.provider :virtualbox do |vb|
+    vb.name = 'counter'
+  end
+end

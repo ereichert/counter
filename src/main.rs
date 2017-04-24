@@ -21,7 +21,6 @@ use std::path::PathBuf;
 const EXIT_SUCCESS: i32 = 0;
 const EXIT_FAILURE: i32 = 1;
 
-// TODO: Refactor and test this code.
 fn main() {
     env_logger::init().unwrap();
     let runtime_context = RuntimeContext::new();
@@ -155,6 +154,8 @@ impl<'a> RuntimeContext<'a> {
 
     fn new_app<'b>() -> clap::App<'a, 'b> {
         clap::App::new("counter")
+            .version(include_str!("version.txt"))
+            .version_short("v")
             .arg(clap::Arg::with_name(LOG_LOCATION_ARG)
                 .required(true)
                 .help("The root directory when the log files are stored."))
