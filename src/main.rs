@@ -175,6 +175,26 @@ impl<'a> RuntimeContext<'a> {
 }
 
 #[cfg(test)]
+mod full_run_tests {
+
+    use std::path::PathBuf;
+    use counter::file_handling;
+
+    #[test]
+    #[ignore]
+    fn a_full_run_should_return_the_correct_aggregation_results() {
+        let num_cpus = ::num_cpus::get();
+        let mut files = file_handling::file_list(&PathBuf::from("./test_artifacts/log_files")).unwrap();
+        let mut runner = super::Runner::new();
+
+        let file_agg = runner.run(num_cpus, &mut files);
+
+        assert_eq!(file_agg.num_raw_records, 838140);
+        assert_eq!(file_agg.aggregation.len(), 95479);
+    }
+}
+
+#[cfg(test)]
 mod runner_tests {
 
     use std::path::PathBuf;
