@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader};
 use walkdir;
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 use ELBRecordAggregation;
 use std::collections::HashMap;
 use record_handling;
@@ -10,9 +10,9 @@ use std::io::Write;
 use std::sync::mpsc;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-pub fn file_list(dir: &Path) -> Result<Vec<DirEntry>, walkdir::Error> {
+pub fn file_list(dir: &Path) -> Result<Vec<PathBuf>, walkdir::Error> {
     let mut filenames = Vec::new();
     let dir_entries = WalkDir::new(dir);
     for entry in dir_entries {
@@ -22,23 +22,26 @@ pub fn file_list(dir: &Path) -> Result<Vec<DirEntry>, walkdir::Error> {
                .extension()
                .map(|ext| ext.eq("log"))
                .unwrap_or(false) {
-            filenames.push(dir_entry);
+            filenames.push(dir_entry.path().to_path_buf());
         }
     }
 
     Ok(filenames)
 }
 
+#[derive(Debug, PartialEq)]
 pub enum AggregationMessages {
     Aggregate(usize, ELBRecordAggregation),
     Next(usize),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum FileHandlingMessages {
-    Filename(DirEntry),
+    Filename(PathBuf),
     Done,
 }
 
+#[derive(Debug)]
 enum FileHandlingErrors<'a> {
     FileReadError { path: &'a Path, err: io::Error },
     LineReadError {
@@ -47,6 +50,7 @@ enum FileHandlingErrors<'a> {
     },
 }
 
+#[derive(Debug)]
 pub struct FileAggregator {
     id: usize,
     num_raw_records: usize,
@@ -77,7 +81,7 @@ impl FileAggregator {
         loop {
             match filename_receiver.recv_timeout(timeout) {
                 Ok(FileHandlingMessages::Filename(filename)) => {
-                    self.aggregate_file(filename.path());
+                    self.aggregate_file(filename.as_path());
                     let _ = aggregate_sender.send(AggregationMessages::Next(self.id));
                 }
                 Ok(FileHandlingMessages::Done) => break,
