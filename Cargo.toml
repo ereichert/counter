@@ -4,7 +4,7 @@ version = "1.0.0"
 authors = ["developers@trafficland.com"]
 
 [dependencies]
-elp = { path = "../elp" }
+elp = "2.0.0"
 walkdir = "1.0.7"
 rustc-serialize = "0.3"
 env_logger = "0.3.2"
