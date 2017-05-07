@@ -1,6 +1,6 @@
 [root]
 name = "counter"
-version = "1.0.0-bc1dbdb"
+version = "1.0.0-SNAPSHOT"
 dependencies = [
  "chrono 0.2.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.23.3 (registry+https://github.com/rust-lang/crates.io-index)",

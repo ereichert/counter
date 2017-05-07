@@ -9,7 +9,8 @@ To build an RPM the build process must be run on a Linux host.  We use CentOS.
 
 If you are not running a CentOS host natively you will need a virtual machine with CentOS installed.
 
-Once you have a base CentOS installation you must prepare it to use the deployment tools.  The following link will walk you through setting up your Linux host.
+Once you have a base CentOS installation you must prepare it to use the deployment tools.  
+The following link will walk you through setting up your Linux host.
  
 https://www.digitalocean.com/community/tutorials/how-to-set-up-python-2-7-6-and-3-3-3-on-centos-6-4
 
@@ -19,8 +20,8 @@ From the Counter source code directory.
 
 ```
 cd deploy
-virtualenv counter_deploy
-source counter_deploy/bin/activate (you can deactivate using the deactivate command)
+virtualenv virt_env
+source virt_env/bin/activate (you can deactivate using the deactivate command)
 ```
 
 Use the requirements.txt file located in the ../deploy directory to install all needed dependencies.
@@ -38,13 +39,7 @@ git config --global --get-regexp 'user.*'
 Once your virtual environment is installed run fabric tasks as follows.
 
 ```
-fab <task>:<task_params> --hosts=<host0,host1,...,hostx> --user=<username> -I
-```
-
-E.g. Run the following to deploy Counter.
-
-```
-fab deploy:mode=full --hosts=logs.tl.com --user=ereichert -I
+fab <task>:<task_params>
 ```
 
 deploy task options:
@@ -55,18 +50,10 @@ full = do the deployment
 
 dryrun = do everything with the exception of the push to the server
 
-### Publish an RPM to our Yum repo
-
-This is not a task you would normally run manually but for testing you can publish an RPM to our Yum repo using a 
-command similar to the following.
-
-```
-fab publish_rpm:local_rpm_path=rpmbuild/RPMS/x86_64/counter-<some_version>-1.el6.x86_64.rpm --hosts=puppet.prod.tl.com --user=ereichert -I
-```
-
 ### Release
 
-In general you should use the release scripts to run the fab tasks that manage a release.  To run a release you must be on the develop branch and it must be clean.
+In general you should use the release scripts to run the fab tasks that manage a release.  
+To run a release you must be on the develop branch and it must be clean.
 
 ```
 fab release_snapshot xor fab release_final
