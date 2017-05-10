@@ -1,7 +1,8 @@
 [package]
 name = "counter"
-version = "1.0.0"
+version = "1.0.0-SNAPSHOT"
 authors = ["developers@trafficland.com"]
+build="build.rs"
 
 [dependencies]
 elp = "2.0.0"
@@ -19,3 +20,7 @@ lazy_static = "0.2.2"
 [dev-dependencies]
 names = "0.11.0"
 rand = "0.3.15"
+
+[build-dependencies]
+rustc_version = "0.1.7"
+chrono = "0.2.25"

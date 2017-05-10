@@ -145,7 +145,7 @@ mod aggregation_controller_unit_tests {
             let received_msg = file_handler_receivers[file_handler_of_interest].recv();
 
             assert_eq!(received_msg.unwrap(),
-                       FileHandlingMessages::Filename(test_file_path_buf.clone()));
+            FileHandlingMessages::Filename(test_file_path_buf.clone()));
         }
         let expected_done_msg = file_handler_receivers[file_handler_of_interest].recv();
 
@@ -178,6 +178,6 @@ mod aggregation_controller_unit_tests {
         let received_msg = file_handler_receivers[file_handler_of_interest].recv();
 
         assert_eq!(received_msg.unwrap(),
-                   FileHandlingMessages::Filename(test_file_path_buf));
+        FileHandlingMessages::Filename(test_file_path_buf));
     }
 }

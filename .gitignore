@@ -1,8 +1,15 @@
 target
 .idea
 *.bk
+*.log
 
 out.folded
 out.stacks
 out.svg
 int_tests/
+
+*.swbuild.pyc
+*.pyc
+counter_deploy/
+!test_artifacts/log_files/*.log
+deploy/virt_env
