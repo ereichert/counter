@@ -7,7 +7,6 @@ build="build.rs"
 [dependencies]
 elp = "2.0.0"
 walkdir = "1.0.7"
-rustc-serialize = "0.3"
 env_logger = "0.3.2"
 chrono = "0.2.17"
 log = "0.3.5"

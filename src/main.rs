@@ -1,4 +1,3 @@
-extern crate rustc_serialize;
 extern crate elp;
 #[macro_use]
 extern crate log;
